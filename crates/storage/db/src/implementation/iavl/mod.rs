@@ -17,7 +17,7 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
 };
 use reth_libmdbx::{
-    ffi, DatabaseFlags, IAVLEnvironment, EnvironmentFlags, Geometry, HandleSlowReadersReturnCode,
+    ffi, DatabaseFlags, Environment, EnvironmentFlags, Geometry, HandleSlowReadersReturnCode,
     MaxReadTransactionDuration, Mode, PageSize, SyncMode, RO, RW,
 };
 use reth_storage_errors::db::LogLevel;

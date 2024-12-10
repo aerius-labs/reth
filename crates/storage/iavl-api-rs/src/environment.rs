@@ -30,7 +30,7 @@ const DEFAULT_MAX_READ_TRANSACTION_DURATION: Duration = Duration::from_secs(5 * 
 /// Accessing the environment is thread-safe.
 /// The environment will be closed when the last instance of this type is dropped.
 #[derive(Clone)]
-pub struct IAVLEnvironment {
+pub struct Environment {
     inner: Arc<EnvironmentInner>,
 }
 

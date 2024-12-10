@@ -18,7 +18,8 @@ pub trait DbTx: Send + Sync {
     fn commit(self) -> Result<bool, DatabaseError>;
     /// Aborts transaction
     fn abort(self);
-    /// Iterate over read only values in table.
+    /// Iterate over read only values in t
+    /// able.
     fn cursor_read<T: Table>(&self) -> Result<Self::Cursor<T>, DatabaseError>;
     /// Iterate over read only values in dup sorted table.
     fn cursor_dup_read<T: DupSort>(&self) -> Result<Self::DupCursor<T>, DatabaseError>;

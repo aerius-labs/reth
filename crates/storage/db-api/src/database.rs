@@ -4,6 +4,7 @@ use crate::{
     DatabaseError,
 };
 use std::{fmt::Debug, sync::Arc};
+use bytes::BufMut;
 use tracing::info;
 #[track_caller]
 fn log_caller_location() -> String {
