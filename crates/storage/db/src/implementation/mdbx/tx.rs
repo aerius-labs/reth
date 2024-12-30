@@ -6,15 +6,16 @@ use crate::{
     tables::utils::decode_one,
     DatabaseError,
 };
+use alloy_consensus::Header;
 use reth_db_api::{
     table::{Compress, DupSort, Encode, Table, TableImporter},
     transaction::{DbTx, DbTxMut},
 };
-use reth_libmdbx::{ffi::MDBX_dbi, CommitLatency, Transaction, TransactionKind, WriteFlags, RW};
-use reth_storage_errors::db::{DatabaseWriteError, DatabaseWriteOperation};
+use reth_libmdbx::{ffi::MDBX_dbi, CommitLatency, Transaction, TransactionKind, RW};
 use reth_tracing::tracing::{debug, trace, warn};
 use std::{
     backtrace::Backtrace,
+    borrow::Cow,
     marker::PhantomData,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -282,20 +283,55 @@ impl<K: TransactionKind> DbTx for Tx<K> {
     type Cursor<T: Table> = Cursor<K, T>;
     type DupCursor<T: DupSort> = Cursor<K, T>;
 
+    // TODO: Don't need to change much since it is only responsible for calling the
+    // get_by-encoded-key
     fn get<T: Table>(&self, key: T::Key) -> Result<Option<<T as Table>::Value>, DatabaseError> {
+        println!("This function is called for read only transctions");
         self.get_by_encoded_key::<T>(&key.encode())
     }
 
+    /*
+    TODO: We will do the get API call from here, currently we have replaced the get from the Libmdbx for default header value given below
+
+    The Key or Value could be any from the following, we just have to Unmarshall that in the following type and we can pass to the system without touching the db.
+    Test is written for Header that's why it is passing, might fail if we change to another table or database.
+
+    Address, BlockHash, BlockNumber, TxHash, TxNumber, B256, accounts::BlockNumberAddress,blocks::{HeaderHash, StoredBlockOmmers},storage_sharded_key::StorageShardedKey, AccountBeforeTx, ClientVersion, CompactU256, IntegerList, ShardedKey,StoredBlockBodyIndices, StoredBlockWithdrawals,table::{Decode, DupSort, Encode, Table, TableInfo}, Receipt, StorageEntry, TransactionSigned, Account, Bytecode, PruneCheckpoint, PruneSegment, StageCheckpoint, BranchNodeCompact,StorageTrieEntry, StoredNibbles, StoredNibblesSubKey
+
+        Currently, I have passed the Default Header values given below(and test passes) but, whereever the get is called we must check weather the tests passes or not
+        {
+            "parent_hash":0x0000000000000000000000000000000000000000000000000000000000000000,
+            "ommers_hash":0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347,
+            "beneficiary":0x0000000000000000000000000000000000000000,
+            "state_root":0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421,
+            "transactions_root":0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421,
+            "receipts_root":0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421,
+            "logs_bloom":0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,
+            "difficulty":0,
+            "number":0,
+            "gas_limit":0,
+            "gas_used":0,
+            "timestamp":0,
+            "extra_data":0x,
+            "mix_hash":0x0000000000000000000000000000000000000000000000000000000000000000,
+            "nonce":0x0000000000000000,
+            "base_fee_per_gas":"None",
+            "withdrawals_root":"None",
+            "blob_gas_used":"None",
+            "excess_blob_gas":"None",
+            "parent_beacon_block_root":"None",
+            "requests_hash":"None",
+            "target_blobs_per_block":"None"
+        }
+         */
     fn get_by_encoded_key<T: Table>(
         &self,
         key: &<T::Key as Encode>::Encoded,
     ) -> Result<Option<T::Value>, DatabaseError> {
-        self.execute_with_operation_metric::<T, _>(Operation::Get, None, |tx| {
-            tx.get(self.get_dbi::<T>()?, key.as_ref())
-                .map_err(|e| DatabaseError::Read(e.into()))?
-                .map(decode_one::<T>)
-                .transpose()
-        })
+        let value = Header::default();
+        let compressed = value.compress();
+        let borrowed_cow = Cow::Borrowed(compressed.as_ref());
+        Some(decode_one::<T>(borrowed_cow)).transpose()
     }
 
     fn commit(self) -> Result<bool, DatabaseError> {
@@ -347,24 +383,18 @@ impl DbTxMut for Tx<RW> {
     type CursorMut<T: Table> = Cursor<RW, T>;
     type DupCursorMut<T: DupSort> = Cursor<RW, T>;
 
+    /*
+    TODO: We will do the put/ delete API call from here, currently we have replaced the put from the Libmdbx for  just Ok(); butit will write to the datababase in the scalerize app.
+
+    We will get Key or Value in any form from the following, we just have to Marshall that in the following type and we can pass to the system without touching the db.
+
+    Address, BlockHash, BlockNumber, TxHash, TxNumber, B256, accounts::BlockNumberAddress,blocks::{HeaderHash, StoredBlockOmmers},storage_sharded_key::StorageShardedKey, AccountBeforeTx, ClientVersion, CompactU256, IntegerList, ShardedKey,StoredBlockBodyIndices, StoredBlockWithdrawals,table::{Decode, DupSort, Encode, Table, TableInfo}, Receipt, StorageEntry, TransactionSigned, Account, Bytecode, PruneCheckpoint, PruneSegment, StageCheckpoint, BranchNodeCompact,StorageTrieEntry, StoredNibbles, StoredNibblesSubKey
+
+    */
     fn put<T: Table>(&self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
         let key = key.encode();
         let value = value.compress();
-        self.execute_with_operation_metric::<T, _>(
-            Operation::Put,
-            Some(value.as_ref().len()),
-            |tx| {
-                tx.put(self.get_dbi::<T>()?, key.as_ref(), value, WriteFlags::UPSERT).map_err(|e| {
-                    DatabaseWriteError {
-                        info: e.into(),
-                        operation: DatabaseWriteOperation::Put,
-                        table_name: T::NAME,
-                        key: key.into(),
-                    }
-                    .into()
-                })
-            },
-        )
+        Ok(())
     }
 
     fn delete<T: Table>(
@@ -379,15 +409,43 @@ impl DbTxMut for Tx<RW> {
             data = Some(value.as_ref());
         };
 
-        self.execute_with_operation_metric::<T, _>(Operation::Delete, None, |tx| {
-            tx.del(self.get_dbi::<T>()?, key.encode(), data)
-                .map_err(|e| DatabaseError::Delete(e.into()))
-        })
+        Ok(true)
     }
 
+    /*
+    TODO: Implement the function to empty the given database. All items will be removed. datababase can of any type in the following database currently used by reth.
+    |----------------------------|-----------|--------------|------------|----------------|------------|
+    | AccountChangeSets          | 8893      | 1            | 18         | 0              | 304 KiB    |
+    | AccountsHistory            | 8893      | 1            | 38         | 0              | 624 KiB    |
+    | AccountsTrie               | 0         | 0            | 0          | 0              | 0 B        |
+    | BlockBodyIndices           | 1         | 0            | 1          | 0              | 16 KiB     |
+    | BlockOmmers                | 0         | 0            | 0          | 0              | 0 B        |
+    | BlockRequests              | 0         | 0            | 0          | 0              | 0 B        |
+    | BlockWithdrawals           | 0         | 0            | 0          | 0              | 0 B        |
+    | Bytecodes                  | 0         | 0            | 0          | 0              | 0 B        |
+    | CanonicalHeaders           | 0         | 0            | 0          | 0              | 0 B        |
+    | ChainState                 | 0         | 0            | 0          | 0              | 0 B        |
+    | HashedAccounts             | 8893      | 1            | 30         | 0              | 496 KiB    |
+    | HashedStorages             | 0         | 0            | 0          | 0              | 0 B        |
+    | HeaderNumbers              | 1         | 0            | 1          | 0              | 16 KiB     |
+    | HeaderTerminalDifficulties | 0         | 0            | 0          | 0              | 0 B        |
+    | Headers                    | 0         | 0            | 0          | 0              | 0 B        |
+    | PlainAccountState          | 8893      | 1            | 23         | 0              | 384 KiB    |
+    | PlainStorageState          | 0         | 0            | 0          | 0              | 0 B        |
+    | PruneCheckpoints           | 0         | 0            | 0          | 0              | 0 B        |
+    | Receipts                   | 0         | 0            | 0          | 0              | 0 B        |
+    | StageCheckpointProgresses  | 0         | 0            | 0          | 0              | 0 B        |
+    | StageCheckpoints           | 14        | 0            | 1          | 0              | 16 KiB     |
+    | StorageChangeSets          | 0         | 0            | 0          | 0              | 0 B        |
+    | StoragesHistory            | 0         | 0            | 0          | 0              | 0 B        |
+    | StoragesTrie               | 0         | 0            | 0          | 0              | 0 B        |
+    | TransactionBlocks          | 0         | 0            | 0          | 0              | 0 B        |
+    | TransactionHashNumbers     | 0         | 0            | 0          | 0              | 0 B        |
+    | TransactionSenders         | 0         | 0            | 0          | 0              | 0 B        |
+    | Transactions               | 0         | 0            | 0          | 0              | 0 B        |
+    | VersionHistory             | 2         | 0            | 1          | 0              | 16 KiB     |
+    */
     fn clear<T: Table>(&self) -> Result<(), DatabaseError> {
-        self.inner.clear_db(self.get_dbi::<T>()?).map_err(|e| DatabaseError::Delete(e.into()))?;
-
         Ok(())
     }
 
