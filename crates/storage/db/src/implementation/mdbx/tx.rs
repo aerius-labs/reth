@@ -1,6 +1,6 @@
 //! Transaction wrapper for libmdbx-sys.
 
-use super::cursor::Cursor;
+use super::{cursor::Cursor, scalerize_client::ScalerizeClient};
 use crate::{
     metrics::{DatabaseEnvMetrics, Operation, TransactionMode, TransactionOutcome},
     tables::utils::decode_one,
@@ -38,13 +38,16 @@ pub struct Tx<K: TransactionKind> {
     ///
     /// If [Some], then metrics are reported.
     metrics_handler: Option<MetricsHandler<K>>,
+
+    /// ScalerizeClient used for communicating with Scalerize multi-store
+    scalerize_client: ScalerizeClient,
 }
 
 impl<K: TransactionKind> Tx<K> {
     /// Creates new `Tx` object with a `RO` or `RW` transaction.
     #[inline]
-    pub const fn new(inner: Transaction<K>) -> Self {
-        Self::new_inner(inner, None)
+    pub const fn new(inner: Transaction<K>, scalerize_client: ScalerizeClient) -> Self {
+        Self::new_inner(inner, None, scalerize_client)
     }
 
     /// Creates new `Tx` object with a `RO` or `RW` transaction and optionally enables metrics.
@@ -53,6 +56,7 @@ impl<K: TransactionKind> Tx<K> {
     pub(crate) fn new_with_metrics(
         inner: Transaction<K>,
         env_metrics: Option<Arc<DatabaseEnvMetrics>>,
+        scalerize_client: ScalerizeClient,
     ) -> reth_libmdbx::Result<Self> {
         let metrics_handler = env_metrics
             .map(|env_metrics| {
@@ -62,12 +66,12 @@ impl<K: TransactionKind> Tx<K> {
                 Ok(handler)
             })
             .transpose()?;
-        Ok(Self::new_inner(inner, metrics_handler))
+        Ok(Self::new_inner(inner, metrics_handler, scalerize_client))
     }
 
     #[inline]
-    const fn new_inner(inner: Transaction<K>, metrics_handler: Option<MetricsHandler<K>>) -> Self {
-        Self { inner, metrics_handler }
+    const fn new_inner(inner: Transaction<K>, metrics_handler: Option<MetricsHandler<K>>, scalerize_client: ScalerizeClient) -> Self {
+        Self { inner, metrics_handler, scalerize_client }
     }
 
     /// Gets this transaction ID.

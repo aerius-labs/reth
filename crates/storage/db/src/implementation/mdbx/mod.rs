@@ -1,5 +1,6 @@
 //! Module that interacts with MDBX.
 
+use scalerize_client::{ScalerizeClient, ClientError};
 use crate::{
     lockfile::StorageLock,
     metrics::DatabaseEnvMetrics,
@@ -26,12 +27,16 @@ use std::{
     ops::{Deref, Range},
     path::Path,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tx::Tx;
+use reqwest::ClientBuilder;
+use std::os::unix::net::UnixStream;
+
 
 pub mod cursor;
 pub mod tx;
+pub mod scalerize_client;
 
 /// 1 KB in bytes
 pub const KILOBYTE: usize = 1024;
@@ -181,17 +186,25 @@ impl Database for DatabaseEnv {
     type TXMut = tx::Tx<RW>;
 
     fn tx(&self) -> Result<Self::TX, DatabaseError> {
+        let scalerize_client = ScalerizeClient::connect()
+        .map_err(DatabaseError::from)?;
+    
         Tx::new_with_metrics(
             self.inner.begin_ro_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
             self.metrics.clone(),
+            scalerize_client,
         )
         .map_err(|e| DatabaseError::InitTx(e.into()))
     }
 
     fn tx_mut(&self) -> Result<Self::TXMut, DatabaseError> {
+        let scalerize_client = ScalerizeClient::connect()
+        .map_err(DatabaseError::from)?;
+
         Tx::new_with_metrics(
             self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
             self.metrics.clone(),
+            scalerize_client,
         )
         .map_err(|e| DatabaseError::InitTx(e.into()))
     }
