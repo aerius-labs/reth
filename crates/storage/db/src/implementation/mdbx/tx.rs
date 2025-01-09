@@ -6,12 +6,21 @@ use crate::{
     tables::utils::decode_one,
     DatabaseError,
 };
+use reth_db_api::{table::Decompress, DatabaseWriteOperation};
+use reth_storage_errors::db::DatabaseWriteError;
+use crate::{
+    tables::{
+        HashedStorages, AccountsHistory, HeaderTerminalDifficulties, CanonicalHeaders, Headers, PlainAccountState, PlainStorageState,
+    },
+    test_utils::*,
+    AccountChangeSets, HashedAccounts,
+};
 use alloy_consensus::Header;
 use reth_db_api::{
     table::{Compress, DupSort, Encode, Table, TableImporter},
     transaction::{DbTx, DbTxMut},
 };
-use reth_libmdbx::{ffi::MDBX_dbi, CommitLatency, Transaction, TransactionKind, RW};
+use reth_libmdbx::{ffi::MDBX_dbi, CommitLatency, Transaction, TransactionKind, WriteFlags, RW};
 use reth_tracing::tracing::{debug, trace, warn};
 use std::{
     backtrace::Backtrace,
@@ -396,9 +405,31 @@ impl DbTxMut for Tx<RW> {
 
     */
     fn put<T: Table>(&self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
+        println!("value before: {:?}", value);
         let key = key.encode();
-        let value = value.compress();
-        Ok(())
+        let compressed_value = value.compress();
+        println!("value after compression: {:?}", compressed_value);
+        println!("compressed value length: {:?}", compressed_value.as_ref().len());
+    
+        let value_slice = compressed_value.as_ref();
+        let decompressed_value = <HashedAccounts as Table>::Value::decompress(value_slice).expect("Decompression failed");
+        println!("decompressed value: {:?}", decompressed_value);
+    
+        self.execute_with_operation_metric::<T, _>(
+            Operation::Put,
+            Some(compressed_value.as_ref().len()),
+            |tx| {
+                tx.put(self.get_dbi::<T>()?, key.as_ref(), compressed_value, WriteFlags::UPSERT).map_err(|e| {
+                    DatabaseWriteError {
+                        info: e.into(),
+                        operation: DatabaseWriteOperation::Put,
+                        table_name: T::NAME,
+                        key: key.into(),
+                    }
+                    .into()
+                })
+            },
+        )
     }
 
     fn delete<T: Table>(

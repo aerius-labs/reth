@@ -508,22 +508,22 @@ impl Deref for DatabaseEnv {
         &self.inner
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         tables::{
-            AccountsHistory, CanonicalHeaders, Headers, PlainAccountState, PlainStorageState,
+            HashedStorages, AccountsHistory, HeaderTerminalDifficulties, CanonicalHeaders, Headers, PlainAccountState, PlainStorageState,
         },
         test_utils::*,
-        AccountChangeSets,
+        AccountChangeSets, HashedAccounts,
     };
     use alloy_consensus::Header;
+    use primitive_types::H256;
     use alloy_primitives::{Address, B256, U256};
     use reth_db_api::{
         cursor::{DbDupCursorRO, DbDupCursorRW, ReverseWalker, Walker},
-        models::{AccountBeforeTx, IntegerList, ShardedKey},
+        models::{AccountBeforeTx, CompactU256, IntegerList, ShardedKey},
         table::{Encode, Table},
     };
     use reth_libmdbx::Error;
@@ -886,7 +886,7 @@ mod tests {
 
         // PUT
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
-        vec![0, 1, 3]
+        vec![5, 1, 3]
             .into_iter()
             .try_for_each(|key| tx.put::<CanonicalHeaders>(key, B256::ZERO))
             .expect(ERROR_PUT);
@@ -897,6 +897,13 @@ mod tests {
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
         assert_eq!(cursor.current(), Ok(None));
+        println!("next: {:?}", cursor.next());
+        println!("prev: {:?}", cursor.prev());
+        println!("prev: {:?}", cursor.prev());
+        println!("next: {:?}", cursor.next());
+        println!("next: {:?}", cursor.next());
+        println!("next: {:?}", cursor.next());
+        println!("next: {:?}", cursor.next());
 
         // Seek exact
         let exact = cursor.seek_exact(missing_key).unwrap();
@@ -1000,16 +1007,193 @@ mod tests {
         let db: Arc<DatabaseEnv> = create_test_db(DatabaseEnvKind::RW);
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
 
-        // PUT
-        vec![0, 1, 3, 5, 7, 9]
-            .into_iter()
-            .try_for_each(|key| tx.put::<CanonicalHeaders>(key, B256::ZERO))
-            .expect(ERROR_PUT);
+        let pavalue = Account {
+            nonce: 18446744073709551615,
+            bytecode_hash: Some(B256::random()),
+            balance: U256::MAX,
+        };
+        let pakey = Address::from_str("0xa2c122be93b0074270ebee7f6b7292c7deb45047")
+            .expect(ERROR_ETH_ADDRESS);
+
+        // println!("for plain account state");
+        // vec![0, 1, 3, 5, 7, 9]
+        // .into_iter()
+        // .try_for_each(|key| tx.put::<PlainAccountState>(pakey, pavalue))
+        // .expect(ERROR_PUT);
+
+        // let b256_var_from_bytes = B256::from([
+        //     0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        //     0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        //     0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        //     0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 3u8, 57u8 // Example bytes
+        // ]);
+
+        let b256_var_from_bytes1 = B256::from([
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 3u8, 57u8 // Example bytes
+        ]);
+
+        let b256_var_from_bytes2 = B256::from([
+            1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 3u8, 57u8 // Example bytes
+        ]);
+
+        let b256_var_from_bytes3 = B256::from([
+            2u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 3u8, 57u8 // Example bytes
+        ]);
+        
+        println!("for hashed storage");
+        // let subkey = B256::random();
+        let subkey: H256 = H256::zero();
+        println!("subkey {:?}", subkey);
+
+        let value1 = U256::from(1);
+        let value2 = U256::from(2);
+        let entry1 = StorageEntry { key: b256_var_from_bytes2, value: value1 };
+        let entry2 = StorageEntry { key: b256_var_from_bytes3, value: value2 };
+
+        // tx.put::<HashedStorages>(b256_var_from_bytes1, entry1)
+        // .expect(ERROR_PUT);
+
+        tx.put::<HashedStorages>(b256_var_from_bytes1, entry2)
+        .expect(ERROR_PUT);
+
+        let result = tx.get::<HashedStorages>(b256_var_from_bytes1).expect(ERROR_GET);
+
+        println!("STORAGE ENTRY1: {:?}", result);
+
+        let result = tx.delete::<HashedStorages>(b256_var_from_bytes1, Some(entry1)).expect(ERROR_GET);
+
+        let result = tx.get::<HashedStorages>(b256_var_from_bytes1).expect(ERROR_GET);
+
+        println!("STORAGE ENTRY2: {:?}", result);
+        // vec![0, 1, 3, 5, 7, 9]
+        // .into_iter()
+        // .try_for_each(|key| tx.put::<HeaderTerminalDifficulties>(key, B256::ZERO))
+        // .expect(ERROR_PUT);
+        println!("FOR HASHED ACCOUNTS");
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 9, balance: max_u256, bytecode_hash: Some(U256::from(12345).into())};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);  
+        
+
+        println!();
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 9, balance: U256::from(1), bytecode_hash: Some(U256::from(12345).into())};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        println!();
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 0, balance: U256::from(12345), bytecode_hash: Some(U256::from(12345).into())};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        println!();
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 0, balance: U256::from(256), bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        println!();
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 9, balance: U256::from(1), bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        println!();
+        
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 9, balance: max_u256, bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        println!();
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 0, balance: U256::from(0), bytecode_hash: Some(U256::from(12345).into())};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 1, balance: U256::from(0), bytecode_hash: Some(U256::from(12345).into())};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 0, balance: U256::from(1), bytecode_hash: Some(U256::from(12345).into())};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 1, balance: U256::from(0), bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 3, balance: U256::from(0), bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 9, balance: U256::from(0), bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 0, balance: U256::from(1), bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 18446744073709551615, balance: U256::from(0), bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
+        let max_u256 = U256::from_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap();
+        let account: Account = Account { nonce: 0, balance: max_u256, bytecode_hash: None};
+        tx.put::<HashedAccounts>(B256::random(), account)
+        .expect(ERROR_PUT);
+
         tx.commit().expect(ERROR_COMMIT);
+        // PUT
+        // vec![0, 1, 3, 5, 7, 9]
+        //     .into_iter()
+        //     .try_for_each(|key| tx.put::<HashedAccounts>(B256::random(), account))
+        //     .expect(ERROR_PUT);
+        // tx.commit().expect(ERROR_COMMIT);
+
+        
+
+        // vec![
+        //     B256::from([0u8; 32]),
+        //     B256::from([1u8; 32]),
+        //     B256::from([3u8; 32]),
+        //     B256::from([5u8; 32]),
+        //     B256::from([7u8; 32]),
+        //     B256::from([9u8; 32]),
+        // ]
+        // .into_iter()
+        // .try_for_each(|key: alloy_primitives::FixedBytes<32>| tx.put::<HashedAccounts>(key, account))
+        // .expect(ERROR_PUT);
+        // tx.commit().expect(ERROR_COMMIT);
 
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
-
+        // let mut cursor1 = tx.cursor_write::<HashedAccounts>().unwrap();
         // INSERT (cursor starts at last)
         cursor.last().unwrap();
         assert_eq!(cursor.current(), Ok(Some((9, B256::ZERO))));
