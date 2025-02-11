@@ -221,27 +221,10 @@ where
                 })?;
             match progress {
                 StateRootProgress::Progress(state, hashed_entries_walked, updates) => {
-                    provider.write_trie_updates(&updates)?;
-
-                    let checkpoint = MerkleCheckpoint::new(
-                        to_block,
-                        state.last_account_key,
-                        state.walker_stack.into_iter().map(StoredSubNode::from).collect(),
-                        state.hash_builder.into(),
-                    );
-                    self.save_execution_checkpoint(provider, Some(checkpoint))?;
-
-                    entities_checkpoint.processed += hashed_entries_walked as u64;
-
-                    return Ok(ExecOutput {
-                        checkpoint: input
-                            .checkpoint()
-                            .with_entities_stage_checkpoint(entities_checkpoint),
-                        done: false,
-                    })
+                    unreachable!()
                 }
                 StateRootProgress::Complete(root, hashed_entries_walked, updates) => {
-                    provider.write_trie_updates(&updates)?;
+                    // provider.write_trie_updates(&updates)?;
 
                     entities_checkpoint.processed += hashed_entries_walked as u64;
 
@@ -250,14 +233,14 @@ where
             }
         } else {
             debug!(target: "sync::stages::merkle::exec", current = ?current_block_number, target = ?to_block, "Updating trie");
-            let (root, updates) =
+            let (root, _) =
                 StateRoot::incremental_root_with_updates(provider.tx_ref(), range)
                     .map_err(|e| {
                         error!(target: "sync::stages::merkle", %e, ?current_block_number, ?to_block, "Incremental state root failed! {INVALID_STATE_ROOT_ERROR_MESSAGE}");
                         StageError::Fatal(Box::new(e))
                     })?;
 
-            provider.write_trie_updates(&updates)?;
+            // provider.write_trie_updates(&updates)?; // Removed the write to trie
 
             let total_hashed_entries = (provider.count_entries::<tables::HashedAccounts>()? +
                 provider.count_entries::<tables::HashedStorages>()?)
@@ -322,7 +305,7 @@ where
         if range.is_empty() {
             info!(target: "sync::stages::merkle::unwind", "Nothing to unwind");
         } else {
-            let (block_root, updates) = StateRoot::incremental_root_with_updates(tx, range)
+            let (block_root, _) = StateRoot::incremental_root_with_updates(tx, range)
                 .map_err(|e| StageError::Fatal(Box::new(e)))?;
 
             // Validate the calculated state root
@@ -333,7 +316,7 @@ where
             validate_state_root(block_root, SealedHeader::seal(target), input.unwind_to)?;
 
             // Validation passed, apply unwind changes to the database.
-            provider.write_trie_updates(&updates)?;
+            // provider.write_trie_updates(&updates)?; // removed the write to updates in the trie
 
             // TODO(alexey): update entities checkpoint
         }

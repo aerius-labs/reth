@@ -1109,8 +1109,8 @@ mod tests {
             }
         }
 
-        let (_, updates) = StateRoot::from_tx(tx).root_with_updates().unwrap();
-        provider_rw.write_trie_updates(&updates).unwrap();
+        // let (_, updates) = StateRoot::from_tx(tx).root_with_updates().unwrap();
+        // provider_rw.write_trie_updates(&updates).unwrap();
 
         let mut state = State::builder().with_bundle_update().build();
 

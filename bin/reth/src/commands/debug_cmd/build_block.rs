@@ -42,7 +42,7 @@ use reth_transaction_pool::{
     blobstore::InMemoryBlobStore, BlobStore, EthPooledTransaction, PoolConfig, TransactionOrigin,
     TransactionPool, TransactionValidationTaskExecutor,
 };
-use reth_trie::StateRoot;
+use reth_trie::{updates::TrieUpdates, StateRoot};
 use reth_trie_db::DatabaseStateRoot;
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 use tracing::*;
@@ -271,7 +271,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
                 debug!(target: "reth::cli", ?execution_outcome, "Executed block");
 
                 let hashed_post_state = state_provider.hashed_post_state(execution_outcome.state());
-                let (state_root, trie_updates) = StateRoot::overlay_root_with_updates(
+                let (state_root, _) = StateRoot::overlay_root_with_updates(
                     provider_factory.provider()?.tx_ref(),
                     hashed_post_state.clone(),
                 )?;
@@ -290,7 +290,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
                     Vec::from([block_with_senders]),
                     execution_outcome,
                     hashed_post_state.into_sorted(),
-                    trie_updates,
+                    TrieUpdates::default(),
                 )?;
                 info!(target: "reth::cli", "Successfully appended built block");
             }

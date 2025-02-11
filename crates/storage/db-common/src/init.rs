@@ -546,8 +546,7 @@ where
     Provider: DBProvider<Tx: DbTxMut> + TrieWriter,
 {
     trace!(target: "reth::cli", "Computing state root");
-
-    let tx = provider.tx_ref();
+    let tx: &<Provider as DBProvider>::Tx = provider.tx_ref();
     let mut intermediate_state: Option<IntermediateStateRootState> = None;
     let mut total_flushed_updates = 0;
 
@@ -557,32 +556,14 @@ where
             .root_with_progress()?
         {
             StateRootProgress::Progress(state, _, updates) => {
-                let updated_len = provider.write_trie_updates(&updates)?;
-                total_flushed_updates += updated_len;
-
-                trace!(target: "reth::cli",
-                    last_account_key = %state.last_account_key,
-                    updated_len,
-                    total_flushed_updates,
-                    "Flushing trie updates"
-                );
-
-                intermediate_state = Some(*state);
-
-                if total_flushed_updates % SOFT_LIMIT_COUNT_FLUSHED_UPDATES == 0 {
-                    info!(target: "reth::cli",
-                        total_flushed_updates,
-                        "Flushing trie updates"
-                    );
-                }
+                unreachable!()
             }
             StateRootProgress::Complete(root, _, updates) => {
-                let updated_len = provider.write_trie_updates(&updates)?;
-                total_flushed_updates += updated_len;
+                // let updated_len = provider.write_trie_updates(&updates)?;
+                // total_flushed_updates += updated_len;
 
                 trace!(target: "reth::cli",
                     %root,
-                    updated_len,
                     total_flushed_updates,
                     "State root has been computed"
                 );

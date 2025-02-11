@@ -2551,7 +2551,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes> HashingWriter for DatabaseProvi
                     .collect(),
                 destroyed_accounts,
             };
-            let (state_root, trie_updates) = StateRoot::from_tx(&self.tx)
+            let (state_root, _) = StateRoot::from_tx(&self.tx)
                 .with_prefix_sets(prefix_sets)
                 .root_with_updates()
                 .map_err(reth_db::DatabaseError::from)?;
@@ -2562,7 +2562,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes> HashingWriter for DatabaseProvi
                     block_hash: end_block_hash,
                 })))
             }
-            self.write_trie_updates(&trie_updates)?;
+            // self.write_trie_updates(&trie_updates)?;
         }
         durations_recorder.record_relative(metrics::Action::InsertMerkleTree);
 
@@ -3056,7 +3056,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypesForProvider + 'static> BlockWrite
 
         // insert hashes and intermediate merkle nodes
         self.write_hashed_state(&hashed_state)?;
-        self.write_trie_updates(&trie_updates)?;
+        // self.write_trie_updates(&trie_updates)?;
         durations_recorder.record_relative(metrics::Action::InsertHashes);
 
         self.update_history_indices(first_number..=last_block_number)?;

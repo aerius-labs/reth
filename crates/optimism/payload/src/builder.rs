@@ -377,7 +377,7 @@ where
         // // calculate the state root
         let state_provider = state.database.as_ref();
         let hashed_state = state_provider.hashed_post_state(execution_outcome.state());
-        let (state_root, trie_output) = {
+        let (state_root, _) = {
             state_provider.state_root_with_updates(hashed_state.clone()).inspect_err(|err| {
                 warn!(target: "payload_builder",
                 parent_header=%ctx.parent().hash(),
@@ -440,7 +440,7 @@ where
             senders: Arc::new(info.executed_senders),
             execution_output: Arc::new(execution_outcome),
             hashed_state: Arc::new(hashed_state),
-            trie: Arc::new(trie_output),
+            trie: Default::default(),
         };
 
         let no_tx_pool = ctx.attributes().no_tx_pool;
