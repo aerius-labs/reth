@@ -60,7 +60,7 @@ const MAX_SAFE_READER_SPACE: usize = 10 * GIGABYTE;
 #[derive(Debug)]
 pub enum DatabaseEnvKind {
     /// Read-only MDBX environment.
-RO,
+    RO,
     /// Read-write MDBX environment.
     RW,
 }
@@ -1088,7 +1088,6 @@ mod tests {
             57u8, // Example bytes
         ]);
 
-
         let account1 = Account {
             nonce: 1,
             balance: U256::from(1000),
@@ -1148,20 +1147,22 @@ mod tests {
         println!("PUT STORAGEENTRY: {:?}", tx.put::<HashedStorages>(b256_var_from_bytes1, entry2));
         println!("GET STORAGEENTRY: {:?}", tx.get::<HashedStorages>(b256_var_from_bytes1));
 
+        // println!("DELETE ACCOUNT: {:?}", tx.delete::<HashedAccounts>(b256_var_from_bytes2,
+        // None)); println!("GET ACCOUNT: {:?}",
+        // tx.get::<HashedAccounts>(b256_var_from_bytes1)); println!("DELETE ACCOUNT: {:?}",
+        // tx.delete::<HashedAccounts>(b256_var_from_bytes1, None)); println!("GET ACCOUNT:
+        // {:?}", tx.get::<HashedAccounts>(b256_var_from_bytes1));
 
-        // println!("DELETE ACCOUNT: {:?}", tx.delete::<HashedAccounts>(b256_var_from_bytes2, None));
-        // println!("GET ACCOUNT: {:?}", tx.get::<HashedAccounts>(b256_var_from_bytes1));
-        // println!("DELETE ACCOUNT: {:?}", tx.delete::<HashedAccounts>(b256_var_from_bytes1, None));
-        // println!("GET ACCOUNT: {:?}", tx.get::<HashedAccounts>(b256_var_from_bytes1));
+        // println!("DELETE STORAGEENTRY: {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes2,
+        // None)); println!("GET STORAGEENTRY: {:?}",
+        // tx.get::<HashedStorages>(b256_var_from_bytes1)); println!("DELETE STORAGEENTRY:
+        // {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes1, None)); println!("GET
+        // STORAGEENTRY: {:?}", tx.get::<HashedStorages>(b256_var_from_bytes1));
 
-        // println!("DELETE STORAGEENTRY: {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes2, None));
-        // println!("GET STORAGEENTRY: {:?}", tx.get::<HashedStorages>(b256_var_from_bytes1));
-        // println!("DELETE STORAGEENTRY: {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes1, None));
-        // println!("GET STORAGEENTRY: {:?}", tx.get::<HashedStorages>(b256_var_from_bytes1));
-
-        // println!("DELETE STORAGEENTRY: {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes2, None));
-        // println!("GET STORAGEENTRY: {:?}", tx.get::<HashedStorages>(b256_var_from_bytes1));
-        // println!("DELETE STORAGEENTRY: {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes1, Some(entry1)));
+        // println!("DELETE STORAGEENTRY: {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes2,
+        // None)); println!("GET STORAGEENTRY: {:?}",
+        // tx.get::<HashedStorages>(b256_var_from_bytes1)); println!("DELETE STORAGEENTRY:
+        // {:?}", tx.delete::<HashedStorages>(b256_var_from_bytes1, Some(entry1)));
         // println!("GET STORAGEENTRY: {:?}", tx.get::<HashedStorages>(b256_var_from_bytes1));
 
         println!("FIRST ACCOUNT 2: {:?}", account_cursor.first());
@@ -1170,7 +1171,10 @@ mod tests {
         println!("SEEK EXACT ACCOUNT 1: {:?}", account_cursor.seek_exact(b256_var_from_bytes1));
         println!("SEEK EXACT ACCOUNT 2: {:?}", account_cursor.seek_exact(zero));
 
-        println!("SEEK EXACT STORAGEENTRY 1: {:?}", storage_entry_cursor.seek_exact(b256_var_from_bytes1));
+        println!(
+            "SEEK EXACT STORAGEENTRY 1: {:?}",
+            storage_entry_cursor.seek_exact(b256_var_from_bytes1)
+        );
         println!("SEEK EXACT STORAGEENTRY 2: {:?}", storage_entry_cursor.seek_exact(zero));
 
         println!("SEEK ACCOUNT: {:?}", account_cursor.seek(zero));
@@ -1188,7 +1192,7 @@ mod tests {
         println!("PREV STORAGEENTRY: {:?}", storage_entry_cursor.prev());
         println!("PREV ACCOUNT: {:?}", account_cursor.prev());
         println!("PREV STORAGEENTRY: {:?}", storage_entry_cursor.prev());
-        
+
         println!("LAST ACCOUNT: {:?}", account_cursor.last());
         println!("LAST STORAGEENTRY: {:?}", storage_entry_cursor.last());
 
@@ -1196,26 +1200,44 @@ mod tests {
         println!("CURRENT STORAGEENTRY: {:?}", storage_entry_cursor.current());
 
         println!("UPSERT ACCOUNT: {:?}", account_cursor.upsert(b256_var_from_bytes9, account3));
-        println!("UPSERT STORAGEENTRY: {:?}", storage_entry_cursor.upsert(b256_var_from_bytes9, entry3));
+        println!(
+            "UPSERT STORAGEENTRY: {:?}",
+            storage_entry_cursor.upsert(b256_var_from_bytes9, entry3)
+        );
 
         println!("CURRENT ACCOUNT: {:?}", account_cursor.current());
         println!("CURRENT STORAGEENTRY: {:?}", storage_entry_cursor.current());
 
         println!("INSERT ACCOUNT: {:?}", account_cursor.insert(b256_var_from_bytes9, account3));
-        println!("INSERT STORAGEENTRY: {:?}", storage_entry_cursor.insert(b256_var_from_bytes9, entry3));
+        println!(
+            "INSERT STORAGEENTRY: {:?}",
+            storage_entry_cursor.insert(b256_var_from_bytes9, entry3)
+        );
 
         println!("INSERT ACCOUNT: {:?}", account_cursor.insert(b256_var_from_bytes8, account4));
-        println!("INSERT STORAGEENTRY: {:?}", storage_entry_cursor.insert(b256_var_from_bytes8, entry4));
-        println!("INSERT STORAGEENTRY: {:?}", storage_entry_cursor.insert(b256_var_from_bytes8, entry5));
+        println!(
+            "INSERT STORAGEENTRY: {:?}",
+            storage_entry_cursor.insert(b256_var_from_bytes8, entry4)
+        );
+        println!(
+            "INSERT STORAGEENTRY: {:?}",
+            storage_entry_cursor.insert(b256_var_from_bytes8, entry5)
+        );
 
         println!("CURRENT ACCOUNT: {:?}", account_cursor.current());
         println!("CURRENT STORAGEENTRY: {:?}", storage_entry_cursor.current());
 
         println!("APPEND ACCOUNT: {:?}", account_cursor.append(b256_var_from_bytes7, account1));
-        println!("APPEND STORAGEENTRY: {:?}", storage_entry_cursor.append(b256_var_from_bytes7, entry1));
+        println!(
+            "APPEND STORAGEENTRY: {:?}",
+            storage_entry_cursor.append(b256_var_from_bytes7, entry1)
+        );
 
         println!("APPEND ACCOUNT: {:?}", account_cursor.append(b256_var_from_bytes9, account1));
-        println!("APPEND STORAGEENTRY: {:?}", storage_entry_cursor.append(b256_var_from_bytes9, entry1));
+        println!(
+            "APPEND STORAGEENTRY: {:?}",
+            storage_entry_cursor.append(b256_var_from_bytes9, entry1)
+        );
 
         // println!("DELETCURRENT ACCOUNT: {:?}", account_cursor.delete_current());
         // println!("DELETCURRENT STORAGEENTRY: {:?}", storage_entry_cursor.delete_current());
@@ -1235,11 +1257,19 @@ mod tests {
         println!("FIRST STORAGEENTRY: {:?}", storage_entry_dup_cursor.first());
         println!("NEXTDUPVAL STORAGEENTRY: {:?}", storage_entry_dup_cursor.next_dup_val());
 
-        println!("SEEKBYKEYSUBKEY STORAGEENTRY: {:?}", storage_entry_dup_cursor.seek_by_key_subkey(b256_var_from_bytes8, b256_var_from_bytes6));
-        // println!("DELETECURRENTDUPLICATES STORAGEENTRY: {:?}", storage_entry_dup_cursor.delete_current_duplicates());
-        // println!("SEEKBYKEYSUBKEY STORAGEENTRY: {:?}", storage_entry_dup_cursor.seek_by_key_subkey(b256_var_from_bytes8, b256_var_from_bytes6));
+        println!(
+            "SEEKBYKEYSUBKEY STORAGEENTRY: {:?}",
+            storage_entry_dup_cursor.seek_by_key_subkey(b256_var_from_bytes8, b256_var_from_bytes6)
+        );
+        // println!("DELETECURRENTDUPLICATES STORAGEENTRY: {:?}",
+        // storage_entry_dup_cursor.delete_current_duplicates()); println!("SEEKBYKEYSUBKEY
+        // STORAGEENTRY: {:?}", storage_entry_dup_cursor.seek_by_key_subkey(b256_var_from_bytes8,
+        // b256_var_from_bytes6));
 
-        println!("APPENDDUP STORAGEENTRY: {:?}", storage_entry_cursor.append_dup(b256_var_from_bytes8, entry4))
+        println!(
+            "APPENDDUP STORAGEENTRY: {:?}",
+            storage_entry_cursor.append_dup(b256_var_from_bytes8, entry4)
+        )
     }
 
     #[test]
@@ -3688,7 +3718,7 @@ mod tests {
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
         // assert_eq!(cursor.append(key_to_append, B256::ZERO), Ok(()));
-        println!("RESPONSE: {:?}", cursor.append(key_to_append,  B256::ZERO));
+        println!("RESPONSE: {:?}", cursor.append(key_to_append, B256::ZERO));
 
         tx.commit().expect(ERROR_COMMIT);
         // let tx = db.tx_mut().expect(ERROR_INIT_TX);
@@ -3696,7 +3726,7 @@ mod tests {
 
         let key_to_append = 4;
 
-        println!("RESPONSE: {:?}", cursor.append(key_to_append,  B256::ZERO));
+        println!("RESPONSE: {:?}", cursor.append(key_to_append, B256::ZERO));
         // Confirm the result
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
@@ -3823,10 +3853,13 @@ mod tests {
         let subkey_to_append = 2;
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<AccountChangeSets>().unwrap();
-        println!("APPENDDUP: {:?}", cursor.append_dup(
-            4,
-            AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
-        ));
+        println!(
+            "APPENDDUP: {:?}",
+            cursor.append_dup(
+                4,
+                AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
+            )
+        );
         assert_eq!(
             cursor.append_dup(
                 transition_id,

@@ -1,12 +1,14 @@
 //! Cursor wrapper for libmdbx-sys.
-use super::{scalerize_client::ScalerizeClient, SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES, SERIALIZED_HASHED_STORAGES_KEY_BYTES, TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES};
+use super::{
+    scalerize_client::ScalerizeClient, SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES,
+    SERIALIZED_HASHED_STORAGES_KEY_BYTES, TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES,
+};
 use crate::{
     metrics::{DatabaseEnvMetrics, Operation},
     tables::utils::*,
     DatabaseError,
 };
 use alloy_primitives::B256;
-use reth_primitives::{Account, StorageEntry};
 use reth_db_api::{
     common::{PairResult, ValueOnlyResult},
     cursor::{
@@ -16,8 +18,15 @@ use reth_db_api::{
     table::{Compress, Decode, Decompress, DupSort, Encode, Table},
 };
 use reth_libmdbx::{Error as MDBXError, TransactionKind, WriteFlags, RO, RW};
+use reth_primitives::{Account, StorageEntry};
 use reth_storage_errors::db::{DatabaseErrorInfo, DatabaseWriteError, DatabaseWriteOperation};
-use std::{borrow::Cow, collections::Bound, marker::PhantomData, ops::RangeBounds, sync::{Arc, RwLock}};
+use std::{
+    borrow::Cow,
+    collections::Bound,
+    marker::PhantomData,
+    ops::RangeBounds,
+    sync::{Arc, RwLock},
+};
 use uuid::Uuid;
 
 /// Read only Cursor.
@@ -51,7 +60,7 @@ impl<K: TransactionKind, T: Table> Cursor<K, T> {
         let uuid = Uuid::new_v4();
         let mut id = [0u8; 8];
         id.copy_from_slice(&uuid.as_bytes()[..8]);
-        Self {inner, buf: Vec::new(), metrics, _dbi: PhantomData, scalerize_client: scalerize_client, id}
+        Self { inner, buf: Vec::new(), metrics, _dbi: PhantomData, scalerize_client, id }
     }
 
     /// If `self.metrics` is `Some(...)`, record a metric with the provided operation and value
@@ -108,16 +117,25 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    let response = client.first(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .first(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize Account".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -130,13 +148,21 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
                     }
                 }
                 TABLE_CODE_HASHED_STORAGES => {
-                    let response = client.first(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .first(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                        DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                    })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -147,7 +173,7 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
 
                         return Ok(Some((key, value)))
                     }
-                    }
+                }
                 _ => unreachable!(),
             }
         }
@@ -163,18 +189,23 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let serialized_key = bincode::serialize(&key).map_err(|_| {
-                DatabaseError::Other("Failed to serialize key".to_string())
-            })?;
-            let response = client.seek_exact(code, self.id.to_vec(), &serialized_key).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let serialized_key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize key".to_string()))?;
+            let response = client
+                .seek_exact(code, self.id.to_vec(), &serialized_key)
+                .map_err(DatabaseError::from)?;
             if response.is_none() {
                 return Ok(None)
             }
 
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    let account: Account = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize Account".to_string())})?;
+                    let account: Account = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
                     unsafe {
                         let ptr = &account as *const Account as *const <T as Table>::Value;
                         let value = ptr.read();
@@ -183,9 +214,13 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
                     }
                 }
                 TABLE_CODE_HASHED_STORAGES => {
-                    let storage_entry: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+                    let storage_entry: StorageEntry =
+                        bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                        })?;
                     unsafe {
-                        let ptr = &storage_entry as *const StorageEntry as *const <T as Table>::Value;
+                        let ptr =
+                            &storage_entry as *const StorageEntry as *const <T as Table>::Value;
                         let value = ptr.read();
 
                         return Ok(Some((key, value)))
@@ -206,18 +241,23 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let serialized_key = bincode::serialize(&key).map_err(|_| {
-                DatabaseError::Other("Failed to serialize key".to_string())
-            })?;
-            let response = client.seek(code, self.id.to_vec(), &serialized_key).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let serialized_key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize key".to_string()))?;
+            let response = client
+                .seek(code, self.id.to_vec(), &serialized_key)
+                .map_err(DatabaseError::from)?;
             if response.is_none() {
                 return Ok(None)
             }
-            
+
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    let account: Account = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize Account".to_string())})?;
+                    let account: Account = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
                     unsafe {
                         let ptr = &account as *const Account as *const <T as Table>::Value;
                         let value = ptr.read();
@@ -226,9 +266,13 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
                     }
                 }
                 TABLE_CODE_HASHED_STORAGES => {
-                    let storage_entry: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+                    let storage_entry: StorageEntry =
+                        bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                        })?;
                     unsafe {
-                        let ptr = &storage_entry as *const StorageEntry as *const <T as Table>::Value;
+                        let ptr =
+                            &storage_entry as *const StorageEntry as *const <T as Table>::Value;
                         let value = ptr.read();
 
                         return Ok(Some((key, value)))
@@ -248,16 +292,25 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    let response = client.next(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .next(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize Account".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -270,13 +323,21 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
                     }
                 }
                 TABLE_CODE_HASHED_STORAGES => {
-                    let response = client.next(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .next(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                        DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                    })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -303,16 +364,25 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    let response = client.prev(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .prev(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize Account".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -325,13 +395,21 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
                     }
                 }
                 TABLE_CODE_HASHED_STORAGES => {
-                    let response = client.prev(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .prev(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                        DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                    })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -358,16 +436,25 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    let response = client.last(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .last(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize Account".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -380,13 +467,21 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
                     }
                 }
                 TABLE_CODE_HASHED_STORAGES => {
-                    let response = client.last(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .last(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                        DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                    })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -412,16 +507,25 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    let response = client.current(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .current(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize Account".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: Account = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -434,13 +538,21 @@ impl<K: TransactionKind, T: Table> DbCursorRO<T> for Cursor<K, T> {
                     }
                 }
                 TABLE_CODE_HASHED_STORAGES => {
-                    let response = client.current(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES).map_err(DatabaseError::from)?;
+                    let response = client
+                        .current(code, self.id.to_vec(), SERIALIZED_HASHED_STORAGES_KEY_BYTES)
+                        .map_err(DatabaseError::from)?;
                     if response.is_none() {
                         return Ok(None)
                     }
 
-                    let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+                    let key: B256 =
+                        bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Key".to_string())
+                        })?;
+                    let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1)
+                        .map_err(|_| {
+                        DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                    })?;
 
                     unsafe {
                         let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -507,14 +619,21 @@ impl<K: TransactionKind, T: DupSort> DbDupCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let response = client.next_dup(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let response = client
+                .next_dup(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                .map_err(DatabaseError::from)?;
             if response.is_none() {
                 return Ok(None)
             }
 
-            let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-            let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+            let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0)
+                .map_err(|_| DatabaseError::Other("Failed to deserialize Key".to_string()))?;
+            let value: StorageEntry =
+                bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {
+                    DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                })?;
 
             unsafe {
                 let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -524,7 +643,7 @@ impl<K: TransactionKind, T: DupSort> DbDupCursorRO<T> for Cursor<K, T> {
                 let value = ptr.read();
 
                 return Ok(Some((key, value)))
-            } 
+            }
         }
 
         decode::<T>(self.inner.next_dup())
@@ -538,14 +657,21 @@ impl<K: TransactionKind, T: DupSort> DbDupCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let response = client.next_no_dup(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let response = client
+                .next_no_dup(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                .map_err(DatabaseError::from)?;
             if response.is_none() {
                 return Ok(None)
             }
 
-            let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0).map_err(|_| {DatabaseError::Other("Failed to deserialize Key".to_string())})?;
-            let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+            let key: B256 = bincode::deserialize(&response.as_ref().unwrap().0)
+                .map_err(|_| DatabaseError::Other("Failed to deserialize Key".to_string()))?;
+            let value: StorageEntry =
+                bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {
+                    DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                })?;
 
             unsafe {
                 let ptr = &key as *const B256 as *const <T as Table>::Key;
@@ -555,7 +681,7 @@ impl<K: TransactionKind, T: DupSort> DbDupCursorRO<T> for Cursor<K, T> {
                 let value = ptr.read();
 
                 return Ok(Some((key, value)))
-            } 
+            }
         }
 
         decode::<T>(self.inner.next_nodup())
@@ -569,20 +695,26 @@ impl<K: TransactionKind, T: DupSort> DbDupCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let response = client.next_dup(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let response = client
+                .next_dup(code, self.id.to_vec(), SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES)
+                .map_err(DatabaseError::from)?;
             if response.is_none() {
                 return Ok(None)
             }
 
-            let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+            let value: StorageEntry =
+                bincode::deserialize(&response.as_ref().unwrap().1).map_err(|_| {
+                    DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                })?;
 
             unsafe {
                 let ptr = &value as *const StorageEntry as *const <T as Table>::Value;
                 let value = ptr.read();
 
                 return Ok(Some(value))
-            } 
+            }
         }
 
         self.inner
@@ -603,23 +735,31 @@ impl<K: TransactionKind, T: DupSort> DbDupCursorRO<T> for Cursor<K, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let key = bincode::serialize(&key).map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
-            let subkey = bincode::serialize(&subkey).map_err(|_| DatabaseError::Other("Failed to serialize Subkey".to_string()))?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
+            let subkey = bincode::serialize(&subkey)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Subkey".to_string()))?;
 
-            let response = client.seek_by_key_subkey(code, self.id.to_vec(), &key, &subkey).map_err(DatabaseError::from)?;
+            let response = client
+                .seek_by_key_subkey(code, self.id.to_vec(), &key, &subkey)
+                .map_err(DatabaseError::from)?;
             if response.is_none() {
                 return Ok(None)
             }
-            
-            let value: StorageEntry = bincode::deserialize(&response.as_ref().unwrap()).map_err(|_| {DatabaseError::Other("Failed to deserialize StorageEntry".to_string())})?;
+
+            let value: StorageEntry =
+                bincode::deserialize(&response.as_ref().unwrap()).map_err(|_| {
+                    DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                })?;
 
             unsafe {
                 let ptr = &value as *const StorageEntry as *const <T as Table>::Value;
                 let value = ptr.read();
 
                 return Ok(Some(value))
-            } 
+            }
         }
 
         self.inner
@@ -689,10 +829,15 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let key = bincode::serialize(&key).map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
-            let value = bincode::serialize(&value).map_err(|_| {DatabaseError::Other("Failed to serialize Value".to_string())})?;
-            client.upsert(code, self.id.to_vec(), key.as_slice(), &value).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
+            let value = bincode::serialize(&value)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
+            client
+                .upsert(code, self.id.to_vec(), key.as_slice(), &value)
+                .map_err(DatabaseError::from)?;
             return client.write().map_err(DatabaseError::from)
         }
 
@@ -725,10 +870,15 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let key = bincode::serialize(&key).map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
-            let value = bincode::serialize(&value).map_err(|_| {DatabaseError::Other("Failed to serialize Value".to_string())})?;
-            client.insert(code, self.id.to_vec(), key.as_slice(), &value).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
+            let value = bincode::serialize(&value)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
+            client
+                .insert(code, self.id.to_vec(), key.as_slice(), &value)
+                .map_err(DatabaseError::from)?;
             return client.write().map_err(DatabaseError::from)
         }
 
@@ -763,10 +913,15 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let key = bincode::serialize(&key).map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
-            let value = bincode::serialize(&value).map_err(|_| {DatabaseError::Other("Failed to serialize Value".to_string())})?;
-            client.append(code, self.id.to_vec(), key.as_slice(), &value).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
+            let value = bincode::serialize(&value)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
+            client
+                .append(code, self.id.to_vec(), key.as_slice(), &value)
+                .map_err(DatabaseError::from)?;
             return client.write().map_err(DatabaseError::from)
         }
 
@@ -799,7 +954,8 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             client.delete_current(code, self.id.to_vec()).map_err(DatabaseError::from)?;
             return client.write().map_err(DatabaseError::from)
         }
@@ -818,8 +974,11 @@ impl<T: DupSort> DbDupCursorRW<T> for Cursor<RW, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            client.delete_current_duplicates(code, self.id.to_vec()).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            client
+                .delete_current_duplicates(code, self.id.to_vec())
+                .map_err(DatabaseError::from)?;
             return client.write().map_err(DatabaseError::from)
         }
 
@@ -836,10 +995,15 @@ impl<T: DupSort> DbDupCursorRW<T> for Cursor<RW, T> {
         };
 
         if let Some(code) = table_code {
-            let mut client = self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            let key = bincode::serialize(&key).map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
-            let value = bincode::serialize(&value).map_err(|_| {DatabaseError::Other("Failed to serialize Value".to_string())})?;
-            client.append_dup(code, self.id.to_vec(), key.as_slice(), &value).map_err(DatabaseError::from)?;
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
+            let value = bincode::serialize(&value)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
+            client
+                .append_dup(code, self.id.to_vec(), key.as_slice(), &value)
+                .map_err(DatabaseError::from)?;
             return client.write().map_err(DatabaseError::from)
         }
 
