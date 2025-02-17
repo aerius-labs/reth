@@ -3031,7 +3031,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypesForProvider + 'static> BlockWrite
         blocks: Vec<SealedBlockWithSenders<Self::Block>>,
         execution_outcome: ExecutionOutcome<Self::Receipt>,
         hashed_state: HashedPostStateSorted,
-        trie_updates: TrieUpdates,
+        _: TrieUpdates,
     ) -> ProviderResult<()> {
         if blocks.is_empty() {
             debug!(target: "providers::db", "Attempted to append empty block range");

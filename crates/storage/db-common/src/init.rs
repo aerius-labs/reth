@@ -558,7 +558,7 @@ where
             StateRootProgress::Progress(state, _, updates) => {
                 unreachable!()
             }
-            StateRootProgress::Complete(root, _, updates) => {
+            StateRootProgress::Complete(root, _, _) => {
                 // let updated_len = provider.write_trie_updates(&updates)?;
                 // total_flushed_updates += updated_len;
 

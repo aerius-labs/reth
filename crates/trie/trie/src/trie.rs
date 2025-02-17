@@ -268,10 +268,8 @@ where
     ///
     /// The storage root, number of walked entries and trie updates
     /// for a given address if requested.
-    pub fn calculate(
-        self,
-        retain_updates: bool,
-    ) -> Result<(B256, usize, StorageTrieUpdates), StorageRootError> {
+    pub fn calculate(self, _: bool) -> Result<(B256, usize, StorageTrieUpdates), StorageRootError> {
+        //TODO: Make a storage root call and thing will work fine
         trace!(target: "trie::storage_root", hashed_address = ?self.hashed_address, "calculating storage root");
         Ok((B256::default(), usize::default(), StorageTrieUpdates::default()))
     }
