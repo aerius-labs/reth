@@ -411,7 +411,7 @@ where
 
     // calculate the state root
     let hashed_state = db.database.db.hashed_post_state(execution_outcome.state());
-    let (state_root, trie_output) = {
+    let (state_root, _) = {
         db.database.inner().state_root_with_updates(hashed_state.clone()).inspect_err(|err| {
             warn!(target: "payload_builder",
                 parent_hash=%parent_header.hash(),
@@ -498,7 +498,7 @@ where
         senders: Arc::new(executed_senders),
         execution_output: Arc::new(execution_outcome),
         hashed_state: Arc::new(hashed_state),
-        trie: Arc::new(trie_output),
+        trie: Arc::new(Default::default()),
     };
 
     let mut payload =

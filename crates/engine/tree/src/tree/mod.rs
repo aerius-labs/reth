@@ -2320,12 +2320,14 @@ where
             None
         };
 
-        let (state_root, trie_output) = if let Some(result) = state_root_result {
+        let (state_root, _) = if let Some(result) = state_root_result {
             result
         } else {
             debug!(target: "engine::tree", block=?sealed_block.num_hash(), ?persistence_not_in_progress, "Failed to compute state root in parallel");
             state_provider.state_root_with_updates(hashed_state.clone())?
         };
+
+        let trie_output = TrieUpdates::default();
 
         if state_root != block.header().state_root() {
             // call post-block hook

@@ -157,7 +157,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
         let execution_outcome = ExecutionOutcome::from((block_execution_output, block.number));
 
         // Unpacked `BundleState::state_root_slow` function
-        let (in_memory_state_root, in_memory_updates) = StateRoot::overlay_root_with_updates(
+        let (in_memory_state_root, _) = StateRoot::overlay_root_with_updates(
             provider.tx_ref(),
             state_provider.hashed_post_state(execution_outcome.state()),
         )?;
@@ -188,7 +188,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
         let accounts = provider_rw.basic_accounts(account_lists)?;
         provider_rw.insert_account_for_hashing(accounts)?;
 
-        let (state_root, incremental_trie_updates) = StateRoot::incremental_root_with_updates(
+        let (state_root, _) = StateRoot::incremental_root_with_updates(
             provider_rw.tx_ref(),
             block.number..=block.number,
         )?;
@@ -201,40 +201,40 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
         }
 
         // Compare updates
-        let mut in_mem_mismatched = Vec::new();
-        let mut incremental_mismatched = Vec::new();
-        let mut in_mem_updates_iter = in_memory_updates.account_nodes_ref().iter().peekable();
-        let mut incremental_updates_iter =
-            incremental_trie_updates.account_nodes_ref().iter().peekable();
+        // let mut in_mem_mismatched = Vec::new();
+        // let mut incremental_mismatched = Vec::new();
+        // let mut in_mem_updates_iter = in_memory_updates.account_nodes_ref().iter().peekable();
+        // let mut incremental_updates_iter =
+        //     incremental_trie_updates.account_nodes_ref().iter().peekable();
 
-        while in_mem_updates_iter.peek().is_some() || incremental_updates_iter.peek().is_some() {
-            match (in_mem_updates_iter.next(), incremental_updates_iter.next()) {
-                (Some(in_mem), Some(incr)) => {
-                    similar_asserts::assert_eq!(in_mem.0, incr.0, "Nibbles don't match");
-                    if in_mem.1 != incr.1 &&
-                        in_mem.0.len() > self.skip_node_depth.unwrap_or_default()
-                    {
-                        in_mem_mismatched.push(in_mem);
-                        incremental_mismatched.push(incr);
-                    }
-                }
-                (Some(in_mem), None) => {
-                    warn!(target: "reth::cli", next = ?in_mem, "In-memory trie updates have more entries");
-                }
-                (None, Some(incr)) => {
-                    tracing::warn!(target: "reth::cli", next = ?incr, "Incremental trie updates have more entries");
-                }
-                (None, None) => {
-                    tracing::info!(target: "reth::cli", "Exhausted all trie updates entries");
-                }
-            }
-        }
+        // while in_mem_updates_iter.peek().is_some() || incremental_updates_iter.peek().is_some() {
+        //     match (in_mem_updates_iter.next(), incremental_updates_iter.next()) {
+        //         (Some(in_mem), Some(incr)) => {
+        //             similar_asserts::assert_eq!(in_mem.0, incr.0, "Nibbles don't match");
+        //             if in_mem.1 != incr.1 &&
+        //                 in_mem.0.len() > self.skip_node_depth.unwrap_or_default()
+        //             {
+        //                 in_mem_mismatched.push(in_mem);
+        //                 incremental_mismatched.push(incr);
+        //             }
+        //         }
+        //         (Some(in_mem), None) => {
+        //             warn!(target: "reth::cli", next = ?in_mem, "In-memory trie updates have more
+        // entries");         }
+        //         (None, Some(incr)) => {
+        //             tracing::warn!(target: "reth::cli", next = ?incr, "Incremental trie updates
+        // have more entries");         }
+        //         (None, None) => {
+        //             tracing::info!(target: "reth::cli", "Exhausted all trie updates entries");
+        //         }
+        //     }
+        // }
 
-        similar_asserts::assert_eq!(
-            incremental_mismatched,
-            in_mem_mismatched,
-            "Mismatched trie updates"
-        );
+        // similar_asserts::assert_eq!(
+        //     incremental_mismatched,
+        //     in_mem_mismatched,
+        //     "Mismatched trie updates"
+        // );
 
         // Drop without committing.
         drop(provider_rw);

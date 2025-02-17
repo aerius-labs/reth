@@ -59,17 +59,6 @@ pub trait DatabaseStateRoot<'a, TX>: Sized {
         range: RangeInclusive<BlockNumber>,
     ) -> Result<(B256, TrieUpdates), StateRootError>;
 
-    /// Computes the state root of the trie with the changed account and storage prefixes and
-    /// existing trie nodes collecting updates in the process.
-    ///
-    /// # Returns
-    ///
-    /// The intermediate progress of state root computation.
-    fn incremental_root_with_progress(
-        tx: &'a TX,
-        range: RangeInclusive<BlockNumber>,
-    ) -> Result<StateRootProgress, StateRootError>;
-
     /// Calculate the state root for this [`HashedPostState`].
     /// Internally, this method retrieves prefixsets and uses them
     /// to calculate incremental state root.
@@ -160,14 +149,6 @@ impl<'a, TX: DbTx> DatabaseStateRoot<'a, TX>
         Self::incremental_root_calculator(tx, range)?.root_with_updates()
     }
 
-    fn incremental_root_with_progress(
-        tx: &'a TX,
-        range: RangeInclusive<BlockNumber>,
-    ) -> Result<StateRootProgress, StateRootError> {
-        debug!(target: "trie::loader", ?range, "incremental state root with progress");
-        Self::incremental_root_calculator(tx, range)?.root_with_progress()
-    }
-
     fn overlay_root(tx: &'a TX, post_state: HashedPostState) -> Result<B256, StateRootError> {
         let prefix_sets = post_state.construct_prefix_sets().freeze();
         let state_sorted = post_state.into_sorted();
@@ -230,7 +211,15 @@ impl<TX: DbTx> DatabaseHashedPostState<TX> for HashedPostState {
         }
 
         // Iterate over storage changesets and record value before first occurring storage change.
-        let mut storages = AddressHashMap::<B256HashMap<U256>>::default();
+        let mut storages: HashMap<
+            Address,
+            HashMap<
+                alloy_primitives::FixedBytes<32>,
+                alloy_primitives::Uint<256, 4>,
+                alloy_primitives::map::FbBuildHasher<32>,
+            >,
+            alloy_primitives::map::FbBuildHasher<20>,
+        > = AddressHashMap::<B256HashMap<U256>>::default();
         let mut storage_changesets_cursor = tx.cursor_read::<tables::StorageChangeSets>()?;
         for entry in
             storage_changesets_cursor.walk_range(BlockNumberAddress((from, Address::ZERO))..)?

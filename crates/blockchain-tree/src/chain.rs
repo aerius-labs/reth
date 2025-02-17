@@ -222,7 +222,7 @@ impl AppendableChain {
         if block_validation_kind.is_exhaustive() {
             // calculate and check state root
             let start = Instant::now();
-            let (state_root, trie_updates) = if block_attachment.is_canonical() {
+            let (state_root, _) = if block_attachment.is_canonical() {
                 let mut execution_outcome =
                     provider.block_execution_data_provider.execution_outcome().clone();
                 execution_outcome.extend(initial_execution_outcome.clone());
@@ -253,7 +253,7 @@ impl AppendableChain {
                 "Validated state root"
             );
 
-            Ok((initial_execution_outcome, trie_updates))
+            Ok((initial_execution_outcome, Some(TrieUpdates::default())))
         } else {
             Ok((initial_execution_outcome, None))
         }

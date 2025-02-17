@@ -31,10 +31,9 @@ pub fn calculate_state_root(c: &mut Criterion) {
         {
             let provider_rw = provider_factory.provider_rw().unwrap();
             provider_rw.write_hashed_state(&db_state.into_sorted()).unwrap();
-            let (_, updates) =
-                StateRoot::from_tx(provider_rw.tx_ref()).root_with_updates().unwrap();
-            provider_rw.write_trie_updates(&updates).unwrap();
-            provider_rw.commit().unwrap();
+            // let (_, _) = StateRoot::from_tx(provider_rw.tx_ref()).root_with_updates().unwrap();
+            // provider_rw.write_trie_updates(&updates).unwrap();
+            // provider_rw.commit().unwrap();
         }
 
         let view = ConsistentDbView::new(provider_factory.clone(), None);

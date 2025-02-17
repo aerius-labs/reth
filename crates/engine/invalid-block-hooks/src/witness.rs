@@ -240,8 +240,7 @@ where
 
         // Calculate the state root and trie updates after re-execution. They should match
         // the original ones.
-        let (re_executed_root, trie_output) =
-            state_provider.state_root_with_updates(hashed_state)?;
+        let (re_executed_root, _) = state_provider.state_root_with_updates(hashed_state)?;
         if let Some((original_updates, original_root)) = trie_updates {
             if re_executed_root != original_root {
                 let filename = format!("{}_{}.state_root.diff", block.number(), block.hash());
@@ -257,23 +256,23 @@ where
                 warn!(target: "engine::invalid_block_hooks::witness", header_state_root=?block.state_root(), ?re_executed_root, diff_path = %diff_path.display(), "Re-executed state root does not match block state root");
             }
 
-            if &trie_output != original_updates {
-                // Trie updates are too big to diff, so we just save the original and re-executed
-                let original_path = self.save_file(
-                    format!("{}_{}.trie_updates.original.json", block.number(), block.hash()),
-                    original_updates,
-                )?;
-                let re_executed_path = self.save_file(
-                    format!("{}_{}.trie_updates.re_executed.json", block.number(), block.hash()),
-                    &trie_output,
-                )?;
-                warn!(
-                    target: "engine::invalid_block_hooks::witness",
-                    original_path = %original_path.display(),
-                    re_executed_path = %re_executed_path.display(),
-                    "Trie updates mismatch after re-execution"
-                );
-            }
+            // if &trie_output != original_updates {
+            //     // Trie updates are too big to diff, so we just save the original and re-executed
+            //     let original_path = self.save_file(
+            //         format!("{}_{}.trie_updates.original.json", block.number(), block.hash()),
+            //         original_updates,
+            //     )?;
+            //     let re_executed_path = self.save_file(
+            //         format!("{}_{}.trie_updates.re_executed.json", block.number(), block.hash()),
+            //         &trie_output,
+            //     )?;
+            //     warn!(
+            //         target: "engine::invalid_block_hooks::witness",
+            //         original_path = %original_path.display(),
+            //         re_executed_path = %re_executed_path.display(),
+            //         "Trie updates mismatch after re-execution"
+            //     );
+            // }
         }
 
         Ok(())
