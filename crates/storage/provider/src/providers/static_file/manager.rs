@@ -7,12 +7,8 @@ use crate::{
     ReceiptProvider, StageCheckpointReader, StatsReader, TransactionVariant, TransactionsProvider,
     TransactionsProviderExt, WithdrawalsProvider,
 };
-use alloy_consensus::Header;
-use alloy_eips::{
-    eip2718::Encodable2718,
-    eip4895::{Withdrawal, Withdrawals},
-    BlockHashOrNumber,
-};
+use alloy_consensus::{transaction::TransactionMeta, Header};
+use alloy_eips::{eip2718::Encodable2718, eip4895::Withdrawals, BlockHashOrNumber};
 use alloy_primitives::{keccak256, Address, BlockHash, BlockNumber, TxHash, TxNumber, B256, U256};
 use dashmap::DashMap;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -39,7 +35,7 @@ use reth_primitives::{
     },
     transaction::recover_signers,
     BlockWithSenders, Receipt, SealedBlockFor, SealedBlockWithSenders, SealedHeader,
-    StaticFileSegment, TransactionMeta, TransactionSigned,
+    StaticFileSegment, TransactionSigned,
 };
 use reth_primitives_traits::SignedTransaction;
 use reth_stages_types::{PipelineTarget, StageId};
@@ -1672,11 +1668,6 @@ impl<N: NodePrimitives> WithdrawalsProvider for StaticFileProvider<N> {
         _id: BlockHashOrNumber,
         _timestamp: u64,
     ) -> ProviderResult<Option<Withdrawals>> {
-        // Required data not present in static_files
-        Err(ProviderError::UnsupportedProvider)
-    }
-
-    fn latest_withdrawal(&self) -> ProviderResult<Option<Withdrawal>> {
         // Required data not present in static_files
         Err(ProviderError::UnsupportedProvider)
     }

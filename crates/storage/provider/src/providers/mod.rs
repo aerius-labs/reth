@@ -4,16 +4,14 @@ use crate::{
     AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, BlockReader, BlockReaderIdExt,
     BlockSource, BlockchainTreePendingStateProvider, CanonStateNotifications,
     CanonStateSubscriptions, ChainSpecProvider, ChainStateBlockReader, ChangeSetReader,
-    DatabaseProviderFactory, EvmEnvProvider, FullExecutionDataProvider, HeaderProvider,
-    NodePrimitivesProvider, ProviderError, PruneCheckpointReader, ReceiptProvider,
-    ReceiptProviderIdExt, StageCheckpointReader, StateProviderBox, StateProviderFactory,
-    StaticFileProviderFactory, TransactionVariant, TransactionsProvider, TreeViewer,
-    WithdrawalsProvider,
+    DatabaseProviderFactory, FullExecutionDataProvider, HeaderProvider, NodePrimitivesProvider,
+    ProviderError, PruneCheckpointReader, ReceiptProvider, ReceiptProviderIdExt,
+    StageCheckpointReader, StateProviderBox, StateProviderFactory, StaticFileProviderFactory,
+    TransactionVariant, TransactionsProvider, TreeViewer, WithdrawalsProvider,
 };
-use alloy_consensus::Header;
+use alloy_consensus::{transaction::TransactionMeta, Header};
 use alloy_eips::{
-    eip4895::{Withdrawal, Withdrawals},
-    BlockHashOrNumber, BlockId, BlockNumHash, BlockNumberOrTag,
+    eip4895::Withdrawals, BlockHashOrNumber, BlockId, BlockNumHash, BlockNumberOrTag,
 };
 use alloy_primitives::{Address, BlockHash, BlockNumber, TxHash, TxNumber, B256, U256};
 use alloy_rpc_types_engine::ForkchoiceState;
@@ -26,18 +24,19 @@ use reth_chain_state::{ChainInfoTracker, ForkChoiceNotifications, ForkChoiceSubs
 use reth_chainspec::{ChainInfo, EthereumHardforks};
 use reth_db::table::Value;
 use reth_db_api::models::{AccountBeforeTx, StoredBlockBodyIndices};
-use reth_evm::{env::EvmEnv, ConfigureEvmEnv};
 use reth_node_types::{
     BlockTy, FullNodePrimitives, HeaderTy, NodeTypes, NodeTypesWithDB, NodeTypesWithEngine,
     ReceiptTy, TxTy,
 };
 use reth_primitives::{
     Account, BlockWithSenders, EthPrimitives, Receipt, SealedBlock, SealedBlockFor,
-    SealedBlockWithSenders, SealedHeader, TransactionMeta,
+    SealedBlockWithSenders, SealedHeader,
 };
 use reth_prune_types::{PruneCheckpoint, PruneSegment};
 use reth_stages_types::{StageCheckpoint, StageId};
-use reth_storage_api::{BlockBodyIndicesProvider, CanonChainTracker, OmmersProvider};
+use reth_storage_api::{
+    BlockBodyIndicesProvider, CanonChainTracker, OmmersProvider, StateCommitmentProvider,
+};
 use reth_storage_errors::provider::ProviderResult;
 use std::{
     collections::BTreeMap,
@@ -255,6 +254,10 @@ impl<N: ProviderNodeTypes> DatabaseProviderFactory for BlockchainProvider<N> {
     fn database_provider_rw(&self) -> ProviderResult<Self::ProviderRW> {
         self.database.database_provider_rw()
     }
+}
+
+impl<N: ProviderNodeTypes> StateCommitmentProvider for BlockchainProvider<N> {
+    type StateCommitment = N::StateCommitment;
 }
 
 impl<N: ProviderNodeTypes> StaticFileProviderFactory for BlockchainProvider<N> {
@@ -566,10 +569,6 @@ impl<N: ProviderNodeTypes> WithdrawalsProvider for BlockchainProvider<N> {
     ) -> ProviderResult<Option<Withdrawals>> {
         self.database.withdrawals_by_block(id, timestamp)
     }
-
-    fn latest_withdrawal(&self) -> ProviderResult<Option<Withdrawal>> {
-        self.database.latest_withdrawal()
-    }
 }
 
 impl<N: TreeNodeTypes> OmmersProvider for BlockchainProvider<N> {
@@ -598,19 +597,6 @@ impl<N: ProviderNodeTypes> StageCheckpointReader for BlockchainProvider<N> {
 
     fn get_all_checkpoints(&self) -> ProviderResult<Vec<(String, StageCheckpoint)>> {
         self.database.provider()?.get_all_checkpoints()
-    }
-}
-
-impl<N: TreeNodeTypes> EvmEnvProvider for BlockchainProvider<N> {
-    fn env_with_header<EvmConfig>(
-        &self,
-        header: &Header,
-        evm_config: EvmConfig,
-    ) -> ProviderResult<EvmEnv>
-    where
-        EvmConfig: ConfigureEvmEnv<Header = Header>,
-    {
-        self.database.provider()?.env_with_header(header, evm_config)
     }
 }
 
@@ -964,7 +950,7 @@ impl<N: ProviderNodeTypes> ChangeSetReader for BlockchainProvider<N> {
 
 impl<N: ProviderNodeTypes> AccountReader for BlockchainProvider<N> {
     /// Get basic account information.
-    fn basic_account(&self, address: Address) -> ProviderResult<Option<Account>> {
+    fn basic_account(&self, address: &Address) -> ProviderResult<Option<Account>> {
         self.database.provider()?.basic_account(address)
     }
 }
