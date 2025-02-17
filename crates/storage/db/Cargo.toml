@@ -12,6 +12,9 @@ description = "Database primitives used in reth."
 workspace = true
 
 [dependencies]
+rand = "0.8"
+rlp = "0.5.0"
+primitive-types = "0.10" 
 # reth
 reth-db-api.workspace = true
 reth-primitives = { workspace = true, features = ["reth-codec"] }
@@ -54,6 +57,8 @@ parking_lot = { workspace = true, optional = true }
 
 # arbitrary utils
 strum = { workspace = true, features = ["derive"], optional = true }
+bincode.workspace = true
+uuid = { version = "1.13.1", features = ["v4"] }
 
 [dev-dependencies]
 # reth libs with arbitrary
