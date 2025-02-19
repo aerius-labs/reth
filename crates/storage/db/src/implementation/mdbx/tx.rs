@@ -479,7 +479,6 @@ impl DbTxMut for Tx<RW> {
                             storage_entry = ptr.read();
                         }
 
-                        println!("STORAGE ENTRY: {:?}", storage_entry);
                         let subkey = bincode::serialize(&storage_entry.key).map_err(|_| {
                             DatabaseError::Other("Failed to serialize key".to_string())
                         })?;

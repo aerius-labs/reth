@@ -192,7 +192,8 @@ impl Database for DatabaseEnv {
         let client_result = rx.recv().map_err(|_| {
             DatabaseError::Other("Connection thread terminated abnormally".to_string())
         })?;
-        let scalerize_client = Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
+        let scalerize_client =
+            Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
 
         Tx::new_with_metrics(
             self.inner.begin_ro_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
@@ -203,18 +204,19 @@ impl Database for DatabaseEnv {
     }
 
     fn tx_mut(&self) -> Result<Self::TXMut, DatabaseError> {
-         let rx = ScalerizeClient::spawn_connect_thread();
-         let client_result = rx.recv().map_err(|_| {
-             DatabaseError::Other("Connection thread terminated abnormally".to_string())
-         })?;
-         let scalerize_client = Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
- 
-         Tx::new_with_metrics(
-             self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
-             self.metrics.clone(),
-             scalerize_client.clone(),
-         )
-         .map_err(|e| DatabaseError::InitTx(e.into()))
+        let rx = ScalerizeClient::spawn_connect_thread();
+        let client_result = rx.recv().map_err(|_| {
+            DatabaseError::Other("Connection thread terminated abnormally".to_string())
+        })?;
+        let scalerize_client =
+            Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
+
+        Tx::new_with_metrics(
+            self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
+            self.metrics.clone(),
+            scalerize_client.clone(),
+        )
+        .map_err(|e| DatabaseError::InitTx(e.into()))
     }
 }
 
@@ -530,7 +532,6 @@ mod tests {
     };
     use alloy_consensus::Header;
     use alloy_primitives::{Address, B256, U160, U256};
-    use bytes::BytesMut;
     use primitive_types::H256;
     use reth_db_api::{
         cursor::{DbDupCursorRO, DbDupCursorRW, ReverseWalker, Walker},
@@ -540,9 +541,7 @@ mod tests {
     use reth_libmdbx::Error;
     use reth_primitives_traits::{Account, StorageEntry};
     use reth_storage_errors::db::{DatabaseWriteError, DatabaseWriteOperation};
-    use rlp::{Decodable, Encodable, Rlp, RlpStream};
-    use scalerize_client::{generate_unique_bytes, ScalerizeClient};
-    use std::{ptr::null, str::FromStr, thread, time::Duration};
+    use std::str::FromStr;
     use tempfile::TempDir;
 
     /// Create database for testing

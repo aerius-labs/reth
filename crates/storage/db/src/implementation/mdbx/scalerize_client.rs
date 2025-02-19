@@ -1,14 +1,13 @@
-use rand::{thread_rng, Rng};
 use reth_storage_errors::db::DatabaseError;
 use std::{
     fmt,
     io::{Read, Write},
     os::unix::net::UnixStream,
     result::Result::Ok,
-    time::{SystemTime, UNIX_EPOCH},
+    sync::mpsc::{self, Receiver},
+    thread,
+    time::Duration,
 };
-use std::sync::mpsc::{self, Receiver};
-use std::{thread, time::Duration};
 
 const OP_PUT: u8 = 1;
 const OP_GET: u8 = 2;
@@ -110,25 +109,22 @@ pub struct ScalerizeClient {
 }
 
 impl ScalerizeClient {
-    pub fn connect() -> Result<Self, ClientError> {    
+    pub fn connect() -> Result<Self, ClientError> {
         let stream = UnixStream::connect(SOCKET_PATH)?;
         Ok(Self { stream })
     }
 
     pub fn spawn_connect_thread() -> Receiver<Result<Self, ClientError>> {
         let (tx, rx) = mpsc::channel();
-        thread::spawn(move || {
-            loop {
-                match ScalerizeClient::connect() {
-                    Ok(client) => {
-                        println!("Connected to scalerize!");
-                        let _ = tx.send(Ok(client));
-                        break;
-                    }
-                    Err(err) => {
-                        println!("Failed to connect: {}. Retrying...", err);
-                        thread::sleep(Duration::from_secs(1));
-                    }
+        thread::spawn(move || loop {
+            match ScalerizeClient::connect() {
+                Ok(client) => {
+                    let _ = tx.send(Ok(client));
+                    break;
+                }
+                Err(err) => {
+                    println!("Failed to connect: {}. Retrying...", err);
+                    thread::sleep(Duration::from_secs(1));
                 }
             }
         });
@@ -160,22 +156,19 @@ impl ScalerizeClient {
             return Err(ClientError::InvalidResponse("Empty response from server".to_string()));
         }
 
-        Self::log_response(&response);
+        // Self::log_response(&response);
         Ok(response)
     }
 
     pub fn get(&mut self, table_code: u8, key: &[u8]) -> Result<Option<(Vec<u8>)>, ClientError> {
-        println!("KEY FOR GET: {:?}", key);
         let mut request = vec![OP_GET];
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(key);
 
-        println!("GET REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR GET: {:?}", response);
         let status = response[0];
         let data = response[1..].to_vec();
         if data.is_empty() {
@@ -199,12 +192,10 @@ impl ScalerizeClient {
         request.extend_from_slice(key);
         request.extend_from_slice(value);
 
-        println!("PUT REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR PUT: {:?}", response);
 
         let status = response[0];
         let data = response[1..].to_vec();
@@ -229,12 +220,10 @@ impl ScalerizeClient {
         if let Some(subkey) = subkey {
             request.extend_from_slice(subkey);
         }
-        println!("DELETE REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR DELETE: {:?}", response);
         let status = response[0];
         let data = response[1..].to_vec();
 
@@ -252,12 +241,10 @@ impl ScalerizeClient {
         let mut request = vec![OP_WRITE];
         request.extend_from_slice(&store_number.to_be_bytes());
 
-        println!("WRITE REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR WRITE: {:?}", response);
         let status = response[0];
         let data = response[1..].to_vec();
 
@@ -280,7 +267,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("FIRST REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -311,12 +297,10 @@ impl ScalerizeClient {
         request.extend_from_slice(&cursor_id);
         request.extend_from_slice(key);
 
-        println!("SEEK_EXACT REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE: {:?}", response);
         let status = response[0];
         let data = &response[1..];
         if data.is_empty() {
@@ -345,7 +329,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&cursor_id);
         request.extend_from_slice(key);
 
-        println!("SEEK REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -377,7 +360,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("NEXT REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -407,7 +389,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("PREV REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -437,7 +418,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("LAST REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -467,7 +447,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("PREV REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -499,12 +478,10 @@ impl ScalerizeClient {
         request.extend_from_slice(key);
         request.extend_from_slice(value);
 
-        println!("UPSERT REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR UPSERT: {:?}", response);
 
         let status = response[0];
         let data = response[1..].to_vec();
@@ -530,12 +507,10 @@ impl ScalerizeClient {
         request.extend_from_slice(key);
         request.extend_from_slice(value);
 
-        println!("INSERT REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR INSERT: {:?}", response);
 
         let status = response[0];
         let data = response[1..].to_vec();
@@ -561,12 +536,10 @@ impl ScalerizeClient {
         request.extend_from_slice(key);
         request.extend_from_slice(value);
 
-        println!("APPEND REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR APPEND: {:?}", response);
 
         let status = response[0];
         let data = response[1..].to_vec();
@@ -589,7 +562,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("DELETE CURRENT REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -616,7 +588,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("NEXT DUP REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -646,7 +617,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("NEXT DUP REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -680,7 +650,6 @@ impl ScalerizeClient {
         request.extend_from_slice(key);
         request.extend_from_slice(subkey);
 
-        println!("SEEK BY KEY SUBKEY REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -710,7 +679,6 @@ impl ScalerizeClient {
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(&cursor_id);
 
-        println!("DELETE CURRENT DUPLICATES REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
@@ -739,12 +707,10 @@ impl ScalerizeClient {
         request.extend_from_slice(key);
         request.extend_from_slice(value);
 
-        println!("APPEND DUP REQUEST: {:?}", request);
         self.stream.write_all(&request)?;
         self.stream.flush()?;
 
         let response = self.read_full_response()?;
-        println!("RESPONSE FOR APPEND DUP: {:?}", response);
 
         let status = response[0];
         let data = response[1..].to_vec();
@@ -798,8 +764,6 @@ impl ScalerizeClient {
         data: &[u8],
         key_len_in_bytes: u8,
     ) -> Result<(Vec<u8>, Vec<u8>), ClientError> {
-        println!("KEY LEN: {:?}", key_len_in_bytes);
-
         if data.is_empty() {
             return Ok((vec![], vec![]));
         }
@@ -818,20 +782,6 @@ impl ScalerizeClient {
         let value = data[key_len_in_bytes as usize..].to_vec();
         Ok((key, value))
     }
-}
-
-pub fn generate_unique_bytes() -> [u8; 8] {
-    // Get current timestamp with nanosecond precision
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64;
-
-    // Generate random number for additional entropy
-    let random = thread_rng().gen::<u32>() as u64;
-
-    // Combine timestamp and random data
-    let unique_num = (timestamp << 32) | random;
-
-    // Convert to bytes
-    unique_num.to_be_bytes()
 }
 
 impl std::fmt::Debug for ScalerizeClient {
