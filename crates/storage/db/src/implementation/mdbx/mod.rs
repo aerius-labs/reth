@@ -188,9 +188,11 @@ impl Database for DatabaseEnv {
     type TXMut = tx::Tx<RW>;
 
     fn tx(&self) -> Result<Self::TX, DatabaseError> {
-        let scalerize_client = Arc::new(std::sync::RwLock::new(
-            ScalerizeClient::connect().map_err(DatabaseError::from)?,
-        ));
+        let rx = ScalerizeClient::spawn_connect_thread();
+        let client_result = rx.recv().map_err(|_| {
+            DatabaseError::Other("Connection thread terminated abnormally".to_string())
+        })?;
+        let scalerize_client = Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
 
         Tx::new_with_metrics(
             self.inner.begin_ro_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
@@ -201,14 +203,18 @@ impl Database for DatabaseEnv {
     }
 
     fn tx_mut(&self) -> Result<Self::TXMut, DatabaseError> {
-        let scalerize_client = ScalerizeClient::connect().map_err(DatabaseError::from)?;
-
-        Tx::new_with_metrics(
-            self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
-            self.metrics.clone(),
-            Arc::new(std::sync::RwLock::new(scalerize_client)),
-        )
-        .map_err(|e| DatabaseError::InitTx(e.into()))
+         let rx = ScalerizeClient::spawn_connect_thread();
+         let client_result = rx.recv().map_err(|_| {
+             DatabaseError::Other("Connection thread terminated abnormally".to_string())
+         })?;
+         let scalerize_client = Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
+ 
+         Tx::new_with_metrics(
+             self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?,
+             self.metrics.clone(),
+             scalerize_client.clone(),
+         )
+         .map_err(|e| DatabaseError::InitTx(e.into()))
     }
 }
 

@@ -7,6 +7,8 @@ use std::{
     result::Result::Ok,
     time::{SystemTime, UNIX_EPOCH},
 };
+use std::sync::mpsc::{self, Receiver};
+use std::{thread, time::Duration};
 
 const OP_PUT: u8 = 1;
 const OP_GET: u8 = 2;
@@ -108,9 +110,29 @@ pub struct ScalerizeClient {
 }
 
 impl ScalerizeClient {
-    pub fn connect() -> Result<Self, ClientError> {
+    pub fn connect() -> Result<Self, ClientError> {    
         let stream = UnixStream::connect(SOCKET_PATH)?;
         Ok(Self { stream })
+    }
+
+    pub fn spawn_connect_thread() -> Receiver<Result<Self, ClientError>> {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            loop {
+                match ScalerizeClient::connect() {
+                    Ok(client) => {
+                        println!("Connected to scalerize!");
+                        let _ = tx.send(Ok(client));
+                        break;
+                    }
+                    Err(err) => {
+                        println!("Failed to connect: {}. Retrying...", err);
+                        thread::sleep(Duration::from_secs(1));
+                    }
+                }
+            }
+        });
+        rx
     }
 
     fn log_response(response: &[u8]) {
