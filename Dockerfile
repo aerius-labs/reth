@@ -44,6 +44,12 @@ WORKDIR /app
 
 # Copy reth over from the build stage
 COPY --from=builder /app/reth /usr/local/bin
+# COPY ./testing/files ./testing/files
+# COPY ./start-testnet-reth-bootnode.sh ./start-testnet-reth-bootnode.sh
+# COPY ./start-testnet-reth-miner-node.sh ./start-testnet-reth-miner-node.sh
+
+# RUN chmod +x ./start-testnet-reth-bootnode.sh
+# RUN chmod +x ./start-testnet-reth-miner-node.sh
 
 # Copy licenses
 COPY LICENSE-* ./
