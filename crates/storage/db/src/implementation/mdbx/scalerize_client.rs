@@ -38,7 +38,7 @@ const OP_APPEND_DUP: u8 = 21;
 const STATUS_SUCCESS: u8 = 1;
 const STATUS_ERROR: u8 = 0;
 
-const SOCKET_PATH: &str = "/tmp/scalerize";
+const SOCKET_PATH: &str = "/tmp/ipc/scalerize.sock";
 /// Represents errors that can occur while interacting with the Scalerize client.
 ///
 /// This enum is used to categorize different types of errors that may arise during
