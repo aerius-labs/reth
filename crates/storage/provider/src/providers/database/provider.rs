@@ -2551,6 +2551,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes> HashingWriter for DatabaseProvi
                     .collect(),
                 destroyed_accounts,
             };
+            // SCALERIZE: The trie update is default because we are avoiding trie updates
             let (state_root, _) = StateRoot::from_tx(&self.tx)
                 .with_prefix_sets(prefix_sets)
                 .root_with_updates()
@@ -2562,7 +2563,6 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes> HashingWriter for DatabaseProvi
                     block_hash: end_block_hash,
                 })))
             }
-            // self.write_trie_updates(&trie_updates)?;
         }
         durations_recorder.record_relative(metrics::Action::InsertMerkleTree);
 
@@ -3026,6 +3026,7 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypesForProvider + 'static> BlockWrite
     }
 
     /// TODO(joshie): this fn should be moved to `UnifiedStorageWriter` eventually
+ // SCALERIZE: The trie update is avoided because we are avoiding trie updates
     fn append_blocks_with_state(
         &self,
         blocks: Vec<SealedBlockWithSenders<Self::Block>>,

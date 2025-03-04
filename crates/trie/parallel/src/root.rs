@@ -78,6 +78,7 @@ where
         self.calculate(true)
     }
 
+    //SCALERIZE: This function is return the state root from the scalerize app
     fn calculate(
         self,
         retain_updates: bool,

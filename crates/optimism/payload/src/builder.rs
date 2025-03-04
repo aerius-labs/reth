@@ -377,6 +377,7 @@ where
         // // calculate the state root
         let state_provider = state.database.as_ref();
         let hashed_state = state_provider.hashed_post_state(execution_outcome.state());
+        // SCALERIZE: The trie update is empty because we are avoiding trie updates
         let (state_root, _) = {
             state_provider.state_root_with_updates(hashed_state.clone()).inspect_err(|err| {
                 warn!(target: "payload_builder",
@@ -435,6 +436,7 @@ where
         debug!(target: "payload_builder", id=%ctx.attributes().payload_id(), sealed_block_header = ?sealed_block.header, "sealed built block");
 
         // create the executed block data
+        // SCALERIZE: The trie update is default because we are avoiding trie updates
         let executed = ExecutedBlock {
             block: sealed_block.clone(),
             senders: Arc::new(info.executed_senders),

@@ -2324,6 +2324,7 @@ where
             None
         };
 
+        // SCALERIZE: The trie update is empty because we are avoiding trie updates
         let (state_root, _) = if let Some(result) = state_root_result {
             result
         } else {
@@ -2331,6 +2332,7 @@ where
             state_provider.state_root_with_updates(hashed_state.clone())?
         };
 
+        // SCALERIZE: The trie update is default because we are avoiding trie updates
         let trie_output = TrieUpdates::default();
 
         if state_root != block.header().state_root() {

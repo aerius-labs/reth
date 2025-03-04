@@ -555,6 +555,8 @@ where
             .with_intermediate_state(intermediate_state)
             .root_with_progress()?
         {
+            // SCALERIZE: The stateroot progress is not used in the current implementation because we
+            // don't write the trie updates to the database. We just calculate the root and return it.
             StateRootProgress::Progress(state, _, updates) => {
                 unreachable!()
             }

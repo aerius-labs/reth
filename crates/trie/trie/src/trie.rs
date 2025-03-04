@@ -148,6 +148,7 @@ where
         self.calculate(true)
     }
 
+    //SCALERIZE: This function is return the state root from the scalerize app
     fn calculate(self, retain_updates: bool) -> Result<StateRootProgress, StateRootError> {
         trace!(target: "trie::state_root", "calculating state root");
         Ok(StateRootProgress::Complete(B256::default(), usize::default(), TrieUpdates::default()))
@@ -268,6 +269,7 @@ where
     ///
     /// The storage root, number of walked entries and trie updates
     /// for a given address if requested.
+    //SCALERIZE: This function is return the storage root from the scalerize app
     pub fn calculate(self, _: bool) -> Result<(B256, usize, StorageTrieUpdates), StorageRootError> {
         //TODO: Make a storage root call and thing will work fine
         trace!(target: "trie::storage_root", hashed_address = ?self.hashed_address, "calculating storage root");

@@ -1210,50 +1210,13 @@ where
         chain: Chain,
         recorder: &mut MakeCanonicalDurationsRecorder,
     ) -> Result<(), CanonicalError> {
+        // SCALERIZE: removed all the function that are associated with trie
         let (blocks, state, chain_trie_updates) = chain.into_inner();
         let hashed_state = self.externals.provider_factory.hashed_post_state(state.state());
         let prefix_sets = hashed_state.construct_prefix_sets().freeze();
         let hashed_state_sorted = hashed_state.into_sorted();
 
-        // Compute state root or retrieve cached trie updates before opening write transaction.
-        let block_hash_numbers =
-            blocks.iter().map(|(number, b)| (number, b.hash())).collect::<Vec<_>>();
-        // let trie_updates = match chain_trie_updates {
-        //     Some(updates) => {
-        //         debug!(target: "blockchain_tree", blocks = ?block_hash_numbers, "Using cached
-        // trie updates");         self.metrics.trie_updates_insert_cached.increment(1);
-        //         updates
-        //     }
-        //     None => {
-        //         debug!(target: "blockchain_tree", blocks = ?block_hash_numbers, "Recomputing
-        // state root for insert");         let provider = self
-        //             .externals
-        //             .provider_factory
-        //             .provider()?
-        //             // State root calculation can take a while, and we're sure no write
-        // transaction             // will be open in parallel. See https://github.com/paradigmxyz/reth/issues/6168.
-        //             .disable_long_read_transaction_safety();
-        //         let (state_root, trie_updates) = StateRoot::from_tx(provider.tx_ref())
-        //             .with_hashed_cursor_factory(HashedPostStateCursorFactory::new(
-        //                 DatabaseHashedCursorFactory::new(provider.tx_ref()),
-        //                 &hashed_state_sorted,
-        //             ))
-        //             .with_prefix_sets(prefix_sets)
-        //             .root_with_updates()
-        //             .map_err(BlockValidationError::from)?;
-        //         let tip = blocks.tip();
-        //         if state_root != tip.state_root {
-        //             return Err(ProviderError::StateRootMismatch(Box::new(RootMismatch {
-        //                 root: GotExpected { got: state_root, expected: tip.state_root },
-        //                 block_number: tip.number,
-        //                 block_hash: tip.hash(),
-        //             }))
-        //             .into())
-        //         }
-        //         self.metrics.trie_updates_insert_recomputed.increment(1);
-        //         trie_updates
-        //     }
-        // };
+
         recorder.record_relative(MakeCanonicalAction::RetrieveStateTrieUpdates);
 
         let provider_rw = self.externals.provider_factory.provider_rw()?;

@@ -60,9 +60,6 @@ fn incremental_vs_full_root(inputs: &[&str], modified: &str) {
         hashed_storage_cursor.upsert(hashed_address, StorageEntry { key, value }).unwrap();
     }
 
-    // Generate the intermediate nodes on the receiving end of the channel
-    // let (_, _, trie_updates) =
-    //     StorageRoot::from_tx_hashed(tx.tx_ref(), hashed_address).root_with_updates().unwrap();
 
     // 1. Some state transition happens, update the hashed storage to the new value
     let modified_key = B256::from_str(modified).unwrap();
@@ -78,8 +75,6 @@ fn incremental_vs_full_root(inputs: &[&str], modified: &str) {
     let loader = StorageRoot::from_tx_hashed(tx.tx_ref(), hashed_address);
     let modified_root = loader.root().unwrap();
 
-    // Update the intermediate roots table so that we can run the incremental verification
-    // tx.write_individual_storage_trie_updates(hashed_address, &trie_updates).unwrap();
 
     // 3. Calculate the incremental root
     let mut storage_changes = PrefixSetMut::default();

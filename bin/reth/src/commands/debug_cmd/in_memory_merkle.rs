@@ -165,6 +165,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
         let execution_outcome = ExecutionOutcome::from((block_execution_output, block.number));
 
         // Unpacked `BundleState::state_root_slow` function
+        // SCALERIZE: The trie update is empty because we are avoiding trie updates
         let (in_memory_state_root, _) = StateRoot::overlay_root_with_updates(
             provider.tx_ref(),
             state_provider.hashed_post_state(execution_outcome.state()),
@@ -196,6 +197,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
         let accounts = provider_rw.basic_accounts(account_lists)?;
         provider_rw.insert_account_for_hashing(accounts)?;
 
+        // SCALERIZE: The trie receiver is empty because we are avoiding trie updates
         let (state_root, _) = StateRoot::incremental_root_with_updates(
             provider_rw.tx_ref(),
             block.number..=block.number,

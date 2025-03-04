@@ -271,6 +271,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
                 debug!(target: "reth::cli", ?execution_outcome, "Executed block");
 
                 let hashed_post_state = state_provider.hashed_post_state(execution_outcome.state());
+                // SCALERIZE: The trie is empty because we are avoiding trie updates
                 let (state_root, _) = StateRoot::overlay_root_with_updates(
                     provider_factory.provider()?.tx_ref(),
                     hashed_post_state.clone(),
@@ -286,6 +287,7 @@ impl<C: ChainSpecParser<ChainSpec = ChainSpec>> Command<C> {
 
                 // Attempt to insert new block without committing
                 let provider_rw = provider_factory.provider_rw()?;
+                // SCALERIZE: The trie is default because we are avoiding trie updates
                 provider_rw.append_blocks_with_state(
                     Vec::from([block_with_senders]),
                     execution_outcome,

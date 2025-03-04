@@ -110,6 +110,7 @@ proptest! {
             // Compute root with in-memory trie nodes overlay
             let mut trie_nodes = TrieUpdates::default();
             trie_nodes.insert_storage_updates(hashed_address, storage_trie_nodes.clone());
+            // SCALERIZE: The trie update is empty because we are avoiding trie updates
             let (storage_root, _, _) =
                 StorageRoot::from_tx_hashed(provider.tx_ref(), hashed_address)
                     .with_prefix_set(hashed_storage.construct_prefix_set().freeze())
@@ -119,8 +120,6 @@ proptest! {
                     ))
                     .root_with_updates()
                     .unwrap();
-
-            // storage_trie_nodes.extend(trie_updates);
 
             // Verify the result
             if is_deleted {

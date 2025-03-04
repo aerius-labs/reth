@@ -222,6 +222,7 @@ impl AppendableChain {
         if block_validation_kind.is_exhaustive() {
             // calculate and check state root
             let start = Instant::now();
+            // SCALERIZE: The trie update is empty because we are avoiding trie updates
             let (state_root, _) = if block_attachment.is_canonical() {
                 let mut execution_outcome =
                     provider.block_execution_data_provider.execution_outcome().clone();
@@ -252,7 +253,7 @@ impl AppendableChain {
                 elapsed = ?start.elapsed(),
                 "Validated state root"
             );
-
+            // SCALERIZE: The trie is default because we are avoiding trie updates
             Ok((initial_execution_outcome, Some(TrieUpdates::default())))
         } else {
             Ok((initial_execution_outcome, None))

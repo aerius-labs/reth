@@ -220,6 +220,8 @@ where
                     StageError::Fatal(Box::new(e))
                 })?;
             match progress {
+                // SCALERIZE: The stateroot progress is not used in the current implementation because we
+                // don't write the trie updates to the database. We just calculate the root and return it.
                 StateRootProgress::Progress(state, hashed_entries_walked, updates) => {
                     unreachable!()
                 }
@@ -233,6 +235,7 @@ where
             }
         } else {
             debug!(target: "sync::stages::merkle::exec", current = ?current_block_number, target = ?to_block, "Updating trie");
+            // SCALERIZE: The trie update is removed because we are avoiding trie updates
             let (root, _) =
                 StateRoot::incremental_root_with_updates(provider.tx_ref(), range)
                     .map_err(|e| {
@@ -305,6 +308,7 @@ where
         if range.is_empty() {
             info!(target: "sync::stages::merkle::unwind", "Nothing to unwind");
         } else {
+            // SCALERIZE: The trie update is removed because we are avoiding trie updates
             let (block_root, _) = StateRoot::incremental_root_with_updates(tx, range)
                 .map_err(|e| StageError::Fatal(Box::new(e)))?;
 
