@@ -815,15 +815,14 @@ where
         keys: Vec<JsonStorageKey>,
         block_number: Option<BlockId>,
     ) -> RpcResult<EIP1186AccountProofResponse> {
-        let mut buf: Vec<u8> = Vec::new();
 
-        let _scalerize_state_client = ScalerizeStateClient::connect().map_err(|err|{
+        let mut scalerize_state_client = ScalerizeStateClient::connect().map_err(|err|{
             jsonrpsee_types::error::ErrorObjectOwned::owned(
                 jsonrpsee_types::error::INTERNAL_ERROR_CODE,
                 err.to_string(),
                 None::<String>,
             )
-        });
+        })?;
 
         let hashed_account_address = keccak256(address);
         let serialized_hashed_account_address = bincode::serialize(&hashed_account_address).map_err(|e| {
@@ -834,7 +833,10 @@ where
             )
         })?;
 
-        buf.extend_from_slice(&serialized_hashed_account_address);
+        // buf.extend_from_slice(&serialized_hashed_account_address);
+
+        let mut buf: Vec<u8> = Vec::new();
+
         // let mut buf = Vec::new();
         for key in keys.clone() {
             if let JsonStorageKey::Hash(hash) = key {
@@ -850,6 +852,43 @@ where
         }
 
         info!("ETH GET PROOF REQUEST BYTES: {:?}", buf);
+
+        let block_spec_bytes = match block_number {
+            Some(BlockId::Number(n)) => {
+                let mut v = Vec::new();
+                match n {
+                    BlockNumberOrTag::Number(num) => {
+                        v.push(0);
+                        v.extend_from_slice(&num.to_be_bytes());
+                    }
+                    // BlockNumberOrTag::Latest => {
+                    //     v.push(1);
+                    // }
+                    _ => {
+                        v.push(1);
+                    }
+                }
+                v
+            }
+            Some(BlockId::Hash(hash)) => {
+                let mut v: Vec<u8> = Vec::new();
+                v.push(2);
+                v.extend_from_slice(hash.block_hash.as_slice());
+                v
+            }
+            None => vec![1], // Default to "latest" when None.
+        };
+
+        let _ = scalerize_state_client.state_proof(&block_spec_bytes, &serialized_hashed_account_address, &buf);
+        // if let Ok(mut client) = scalerize_state_client {
+        //     client.state_proof(&serialized_hashed_account_address, &buf);
+        // } else {
+        //     return Err(jsonrpsee_types::error::ErrorObjectOwned::owned(
+        //         jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+        //         "Failed to connect to ScalerizeStateClient".to_string(),
+        //         None::<String>,
+        //     ));
+        // }
         trace!(target: "rpc::eth", ?address, ?block_number, ?keys, "Serving eth_getProof");
         Ok(EthState::get_proof(self, address, keys, block_number)?.await?)
     }

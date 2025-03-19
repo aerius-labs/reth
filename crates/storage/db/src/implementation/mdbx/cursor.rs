@@ -835,10 +835,10 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
                 .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
             let value = bincode::serialize(&value)
                 .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
-            client
+            return client
                 .upsert(code, self.id.to_vec(), key.as_slice(), &value)
-                .map_err(DatabaseError::from)?;
-            return client.write().map_err(DatabaseError::from)
+                .map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();
@@ -876,10 +876,10 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
                 .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
             let value = bincode::serialize(&value)
                 .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
-            client
+            return client
                 .insert(code, self.id.to_vec(), key.as_slice(), &value)
-                .map_err(DatabaseError::from)?;
-            return client.write().map_err(DatabaseError::from)
+                .map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();
@@ -919,10 +919,10 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
                 .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
             let value = bincode::serialize(&value)
                 .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
-            client
+            return client
                 .append(code, self.id.to_vec(), key.as_slice(), &value)
-                .map_err(DatabaseError::from)?;
-            return client.write().map_err(DatabaseError::from)
+                .map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();
@@ -956,8 +956,8 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
         if let Some(code) = table_code {
             let mut client =
                 self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            client.delete_current(code, self.id.to_vec()).map_err(DatabaseError::from)?;
-            return client.write().map_err(DatabaseError::from)
+            return client.delete_current(code, self.id.to_vec()).map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
         }
 
         self.execute_with_operation_metric(Operation::CursorDeleteCurrent, None, |this| {
@@ -976,10 +976,10 @@ impl<T: DupSort> DbDupCursorRW<T> for Cursor<RW, T> {
         if let Some(code) = table_code {
             let mut client =
                 self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
-            client
+            return client
                 .delete_current_duplicates(code, self.id.to_vec())
-                .map_err(DatabaseError::from)?;
-            return client.write().map_err(DatabaseError::from)
+                .map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
         }
 
         self.execute_with_operation_metric(Operation::CursorDeleteCurrentDuplicates, None, |this| {
@@ -1001,10 +1001,10 @@ impl<T: DupSort> DbDupCursorRW<T> for Cursor<RW, T> {
                 .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
             let value = bincode::serialize(&value)
                 .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
-            client
+            return client
                 .append_dup(code, self.id.to_vec(), key.as_slice(), &value)
-                .map_err(DatabaseError::from)?;
-            return client.write().map_err(DatabaseError::from)
+                .map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();

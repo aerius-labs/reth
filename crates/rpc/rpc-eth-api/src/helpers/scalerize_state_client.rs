@@ -8,7 +8,8 @@ use std::{
     time::Duration,
 };
 
-const OP_STATE_PROOF: u8 = 1;
+const OP_STATE_ROOT: u8 = 1;
+const OP_STATE_PROOF: u8 = 2;
 
 const STATUS_SUCCESS: u8 = 1;
 const STATUS_ERROR: u8 = 0;
@@ -135,29 +136,30 @@ impl ScalerizeStateClient {
         Ok(response)
     }
 
-    // pub fn get(&mut self, table_code: u8, key: &[u8]) -> Result<Option<(Vec<u8>)>, ClientError> {
-    //     let mut request = vec![OP_GET];
-    //     request.extend_from_slice(&table_code.to_be_bytes());
-    //     request.extend_from_slice(key);
+    pub fn state_proof(&mut self, block_spec_bytes: &[u8], serialized_hashed_account_bytes: &[u8], serialized_storage_keys_bytes: &[u8]) -> Result<Option<Vec<u8>>, ClientError> {
+        let mut request = vec![OP_STATE_PROOF];
+        request.extend_from_slice(block_spec_bytes);
+        request.extend_from_slice(serialized_hashed_account_bytes);
+        request.extend_from_slice(serialized_storage_keys_bytes);
 
-    //     self.stream.write_all(&request)?;
-    //     self.stream.flush()?;
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
 
-    //     let response = self.read_full_response()?;
-    //     let status = response[0];
-    //     let data = response[1..].to_vec();
-    //     if data.is_empty() {
-    //         return Ok(None)
-    //     }
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = response[1..].to_vec();
+        if data.is_empty() {
+            return Ok(None)
+        }
 
-    //     match status {
-    //         STATUS_SUCCESS => Ok(Some(data)),
-    //         STATUS_ERROR => {
-    //             Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
-    //         }
-    //         _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
-    //     }
-    // }
+        match status {
+            STATUS_SUCCESS => Ok(Some(data)),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
 
     // // no need to send rlp encoded for dupsorted even when using this method
     // // just send the value at that subkey

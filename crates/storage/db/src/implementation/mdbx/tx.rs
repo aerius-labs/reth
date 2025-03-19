@@ -362,7 +362,23 @@ impl<K: TransactionKind> DbTx for Tx<K> {
 
     fn commit(self) -> Result<bool, DatabaseError> {
         self.execute_with_close_transaction_metric(TransactionOutcome::Commit, |this| {
-            match this.inner.commit().map_err(|e| DatabaseError::Commit(e.into())) {
+            // First, commit the inner MDBX transaction.
+            let commit_result = this.inner.commit().map_err(|e| DatabaseError::Commit(e.into()));
+            
+            // If inner commit succeeded, then perform the scalerize client write.
+            if let Ok((_v, ref _latency)) = &commit_result {
+                // Acquire mutable access and perform the scalerize client write.
+                let scalerize_write = this.scalerize_client
+                    .write()
+                    .map_err(|e| DatabaseError::Other(e.to_string()))
+                    .and_then(|mut client| client.write().map_err(DatabaseError::from));
+                // If the scalerize write fails, immediately return that error.
+                if let Err(err) = scalerize_write {
+                    return (Err(err), None);
+                }
+            }
+            // Then, return the inner commit result.
+            match commit_result {
                 Ok((v, latency)) => (Ok(v), Some(latency)),
                 Err(e) => (Err(e), None),
             }
@@ -424,8 +440,8 @@ impl DbTxMut for Tx<RW> {
             let value = bincode::serialize(&value)
                 .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
 
-            client.put(code, key.as_slice(), &value).map_err(DatabaseError::from)?;
-            return client.write().map_err(DatabaseError::from)
+            return client.put(code, key.as_slice(), &value).map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();
@@ -466,10 +482,11 @@ impl DbTxMut for Tx<RW> {
 
             match code {
                 TABLE_CODE_HASHED_ACCOUNTS => {
-                    client
+                    return client
                         .delete(code, &key, None)
-                        .map_err(|e| DatabaseError::Other(e.to_string()))?;
-                    return client.write().map(|_| true).map_err(DatabaseError::from)
+                        .map(|_|true)
+                        .map_err(|e| DatabaseError::Other(e.to_string()))
+                    // return client.write().map(|_| true).map_err(DatabaseError::from)
                 }
                 TABLE_CODE_HASHED_STORAGES => {
                     if let Some(value) = value {
@@ -482,15 +499,17 @@ impl DbTxMut for Tx<RW> {
                         let subkey = bincode::serialize(&storage_entry.key).map_err(|_| {
                             DatabaseError::Other("Failed to serialize key".to_string())
                         })?;
-                        client
+                        return client
                             .delete(code, &key, Some(&subkey))
-                            .map_err(|e| DatabaseError::Other(e.to_string()))?;
-                        return client.write().map(|_| true).map_err(DatabaseError::from)
+                            .map(|_|true)
+                            .map_err(|e| DatabaseError::Other(e.to_string()))
+                            // return client.write().map(|_| true).map_err(DatabaseError::from)
                     } else {
-                        client
+                        return client
                             .delete(code, &key, None)
-                            .map_err(|e| DatabaseError::Other(e.to_string()))?;
-                        return client.write().map(|_| true).map_err(DatabaseError::from)
+                            .map(|_| true)
+                            .map_err(|e| DatabaseError::Other(e.to_string()))
+                        // return client.write().map(|_| true).map_err(DatabaseError::from)
                     }
                 }
                 _ => unreachable!(),
