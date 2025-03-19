@@ -21,7 +21,7 @@ use reth_libmdbx::{
 };
 use reth_storage_errors::db::LogLevel;
 use reth_tracing::tracing::error;
-use scalerize_client::ScalerizeClient;
+use scalerize_client::ScalerizeDBClient;
 use std::{
     ops::{Deref, Range},
     path::Path,
@@ -188,7 +188,7 @@ impl Database for DatabaseEnv {
     type TXMut = tx::Tx<RW>;
 
     fn tx(&self) -> Result<Self::TX, DatabaseError> {
-        let rx = ScalerizeClient::spawn_connect_thread();
+        let rx = ScalerizeDBClient::spawn_connect_thread();
         let client_result = rx.recv().map_err(|_| {
             DatabaseError::Other("Connection thread terminated abnormally".to_string())
         })?;
@@ -204,7 +204,7 @@ impl Database for DatabaseEnv {
     }
 
     fn tx_mut(&self) -> Result<Self::TXMut, DatabaseError> {
-        let rx = ScalerizeClient::spawn_connect_thread();
+        let rx = ScalerizeDBClient::spawn_connect_thread();
         let client_result = rx.recv().map_err(|_| {
             DatabaseError::Other("Connection thread terminated abnormally".to_string())
         })?;

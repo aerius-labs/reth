@@ -104,11 +104,11 @@ impl Into<i32> for ClientError {
 }
 
 // Client for making DB calls to scalerize
-pub struct ScalerizeClient {
+pub struct ScalerizeDBClient {
     stream: UnixStream,
 }
 
-impl ScalerizeClient {
+impl ScalerizeDBClient {
     pub fn connect() -> Result<Self, ClientError> {
         let stream = UnixStream::connect(SOCKET_PATH)?;
         Ok(Self { stream })
@@ -117,7 +117,7 @@ impl ScalerizeClient {
     pub fn spawn_connect_thread() -> Receiver<Result<Self, ClientError>> {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || loop {
-            match ScalerizeClient::connect() {
+            match ScalerizeDBClient::connect() {
                 Ok(client) => {
                     let _ = tx.send(Ok(client));
                     break;
@@ -784,9 +784,9 @@ impl ScalerizeClient {
     }
 }
 
-impl std::fmt::Debug for ScalerizeClient {
+impl std::fmt::Debug for ScalerizeDBClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ScalerizeClient")
+        f.debug_struct("ScalerizeDBClient")
             .field("stream", &format!("UnixStream connected to {}", SOCKET_PATH))
             .finish()
     }

@@ -14,10 +14,11 @@ use alloy_rpc_types_eth::{
 use alloy_serde::JsonStorageKey;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use reth_rpc_server_types::{result::internal_rpc_err, ToRpcResult};
-use tracing::trace;
+use tracing::{trace, info};
+use alloy_primitives::keccak256;
 
 use crate::{
-    helpers::{EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, FullEthApi},
+    helpers::{EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, FullEthApi, ScalerizeStateClient},
     RpcBlock, RpcHeader, RpcReceipt, RpcTransaction,
 };
 
@@ -428,6 +429,15 @@ where
         full: bool,
     ) -> RpcResult<Option<RpcBlock<T::NetworkTypes>>> {
         trace!(target: "rpc::eth", ?number, ?full, "Serving eth_getBlockByNumber");
+        // Ok(EthBlocks::rpc_block(self, number.into(), full).await?)
+        let _scalerize_state_client = ScalerizeStateClient::connect().map_err(|err|{
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                err.to_string(),
+                None::<String>,
+            )
+        })?;
+        info!("CALLING BLOCKBYNUMBER");
         Ok(EthBlocks::rpc_block(self, number.into(), full).await?)
     }
 
@@ -805,7 +815,42 @@ where
         keys: Vec<JsonStorageKey>,
         block_number: Option<BlockId>,
     ) -> RpcResult<EIP1186AccountProofResponse> {
-        trace!(target: "rpc::eth", ?address, ?keys, ?block_number, "Serving eth_getProof");
+        let mut buf: Vec<u8> = Vec::new();
+
+        let _scalerize_state_client = ScalerizeStateClient::connect().map_err(|err|{
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                err.to_string(),
+                None::<String>,
+            )
+        });
+
+        let hashed_account_address = keccak256(address);
+        let serialized_hashed_account_address = bincode::serialize(&hashed_account_address).map_err(|e| {
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                format!("Bincode serialization error: {e}"),
+                None::<String>,
+            )
+        })?;
+
+        buf.extend_from_slice(&serialized_hashed_account_address);
+        // let mut buf = Vec::new();
+        for key in keys.clone() {
+            if let JsonStorageKey::Hash(hash) = key {
+                let serialized = bincode::serialize(&hash).map_err(|e| {
+                    jsonrpsee_types::error::ErrorObjectOwned::owned(
+                        jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                        format!("Bincode serialization error: {e}"),
+                        None::<String>,
+                    )
+                })?;
+                buf.extend_from_slice(&serialized);
+            }
+        }
+
+        info!("ETH GET PROOF REQUEST BYTES: {:?}", buf);
+        trace!(target: "rpc::eth", ?address, ?block_number, ?keys, "Serving eth_getProof");
         Ok(EthState::get_proof(self, address, keys, block_number)?.await?)
     }
 }

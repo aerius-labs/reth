@@ -1,6 +1,6 @@
 //! Cursor wrapper for libmdbx-sys.
 use super::{
-    scalerize_client::ScalerizeClient, SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES,
+    scalerize_client::ScalerizeDBClient, SERIALIZED_HASHED_ACCOUNTS_KEY_BYTES,
     SERIALIZED_HASHED_STORAGES_KEY_BYTES, TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES,
 };
 use crate::{
@@ -46,7 +46,7 @@ pub struct Cursor<K: TransactionKind, T: Table> {
     /// Phantom data to enforce encoding/decoding.
     _dbi: PhantomData<T>,
     // Client for making DB calls to scalerize
-    scalerize_client: Arc<RwLock<ScalerizeClient>>,
+    scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
     /// An 8-byte id generated from a UUID.
     id: [u8; 8],
 }
@@ -55,7 +55,7 @@ impl<K: TransactionKind, T: Table> Cursor<K, T> {
     pub(crate) fn new_with_metrics(
         inner: reth_libmdbx::Cursor<K>,
         metrics: Option<Arc<DatabaseEnvMetrics>>,
-        scalerize_client: Arc<RwLock<ScalerizeClient>>,
+        scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
     ) -> Self {
         let uuid = Uuid::new_v4();
         let mut id = [0u8; 8];

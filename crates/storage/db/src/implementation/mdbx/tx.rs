@@ -1,7 +1,7 @@
 //! Transaction wrapper for libmdbx-sys.
 
 use super::{
-    cursor::Cursor, scalerize_client::ScalerizeClient, TABLE_CODE_HASHED_ACCOUNTS,
+    cursor::Cursor, scalerize_client::ScalerizeDBClient, TABLE_CODE_HASHED_ACCOUNTS,
     TABLE_CODE_HASHED_STORAGES,
 };
 use crate::{
@@ -43,7 +43,7 @@ pub struct Tx<K: TransactionKind> {
     metrics_handler: Option<MetricsHandler<K>>,
 
     // Client for making DB calls to scalerize
-    scalerize_client: Arc<RwLock<ScalerizeClient>>,
+    scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
 }
 
 impl<K: TransactionKind> Tx<K> {
@@ -51,7 +51,7 @@ impl<K: TransactionKind> Tx<K> {
     #[inline]
     pub const fn new(
         inner: Transaction<K>,
-        scalerize_client: Arc<RwLock<ScalerizeClient>>,
+        scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
     ) -> Self {
         Self::new_inner(inner, None, scalerize_client)
     }
@@ -62,7 +62,7 @@ impl<K: TransactionKind> Tx<K> {
     pub(crate) fn new_with_metrics(
         inner: Transaction<K>,
         env_metrics: Option<Arc<DatabaseEnvMetrics>>,
-        scalerize_client: Arc<RwLock<ScalerizeClient>>,
+        scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
     ) -> reth_libmdbx::Result<Self> {
         let metrics_handler = env_metrics
             .map(|env_metrics| {
@@ -79,7 +79,7 @@ impl<K: TransactionKind> Tx<K> {
     const fn new_inner(
         inner: Transaction<K>,
         metrics_handler: Option<MetricsHandler<K>>,
-        scalerize_client: Arc<RwLock<ScalerizeClient>>,
+        scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
     ) -> Self {
         Self { inner, metrics_handler, scalerize_client }
     }

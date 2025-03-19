@@ -26,6 +26,7 @@ pub mod spec;
 pub mod state;
 pub mod trace;
 pub mod transaction;
+pub mod scalerize_state_client;
 
 pub use block::{EthBlocks, LoadBlock};
 pub use blocking_task::SpawnBlocking;
@@ -38,6 +39,7 @@ pub use spec::EthApiSpec;
 pub use state::{EthState, LoadState};
 pub use trace::Trace;
 pub use transaction::{EthTransactions, LoadTransaction};
+pub use scalerize_state_client::ScalerizeStateClient;
 
 use crate::FullEthApiTypes;
 
