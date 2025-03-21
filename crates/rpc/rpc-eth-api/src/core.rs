@@ -1,6 +1,8 @@
 //! Implementation of the [`jsonrpsee`] generated [`EthApiServer`] trait. Handles RPC requests for
 //! the `eth_` namespace.
 use alloy_dyn_abi::TypedData;
+use serde_json;
+use jsonrpsee_types::error::ErrorObjectOwned;
 use alloy_eips::{eip2930::AccessListResult, BlockId, BlockNumberOrTag};
 use alloy_json_rpc::RpcObject;
 use alloy_primitives::{Address, Bytes, B256, B64, U256, U64};
@@ -833,12 +835,11 @@ where
             )
         })?;
 
-        // buf.extend_from_slice(&serialized_hashed_account_address);
-
         let mut buf: Vec<u8> = Vec::new();
 
         // let mut buf = Vec::new();
         for key in keys.clone() {
+            println!("STORAGE KEY INPUT: {:?}", key);
             if let JsonStorageKey::Hash(hash) = key {
                 let serialized = bincode::serialize(&hash).map_err(|e| {
                     jsonrpsee_types::error::ErrorObjectOwned::owned(
@@ -879,17 +880,51 @@ where
             None => vec![1], // Default to "latest" when None.
         };
 
-        let _ = scalerize_state_client.state_proof(&block_spec_bytes, &serialized_hashed_account_address, &buf);
-        // if let Ok(mut client) = scalerize_state_client {
-        //     client.state_proof(&serialized_hashed_account_address, &buf);
-        // } else {
-        //     return Err(jsonrpsee_types::error::ErrorObjectOwned::owned(
-        //         jsonrpsee_types::error::INTERNAL_ERROR_CODE,
-        //         "Failed to connect to ScalerizeStateClient".to_string(),
-        //         None::<String>,
-        //     ));
-        // }
-        trace!(target: "rpc::eth", ?address, ?block_number, ?keys, "Serving eth_getProof");
-        Ok(EthState::get_proof(self, address, keys, block_number)?.await?)
+        let account_proof_response_bytes = scalerize_state_client.state_proof(&block_spec_bytes, &serialized_hashed_account_address, &buf).map_err(|e| {
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                format!("eth_getProof failed error: {e}"),
+                None::<String>,
+            )
+        })?;
+
+        if account_proof_response_bytes.is_none() {
+            return Err(jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                "eth_getProof returned no data".to_string(),
+                None::<String>,
+            ));
+        }
+
+        println!("PROOF DATA: {:?}", account_proof_response_bytes);
+
+        let mut response: EIP1186AccountProofResponse = serde_json::from_slice(account_proof_response_bytes.as_ref().unwrap()).map_err(|e| {
+            ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                format!("Failed to deserialize proof response: {e}"),
+                None::<String>,
+            )
+        })?;
+
+        println!("ACCOUNT PROOF RESPONSE: {:?}", response);
+
+        let account = self.get_account(address, block_number.unwrap_or_else(|| {
+            // Default to latest if no block number provided.
+            BlockId::Number(BlockNumberOrTag::Latest.into())
+        })).await?;
+    
+        // Update the proof response with account details.
+        if let Some(acc) = account {
+            response.balance = acc.balance;
+            response.nonce = acc.nonce;
+            response.code_hash = acc.code_hash;
+            return Ok(response);
+        } else {
+            return Err(ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                "Account not found for provided address".to_string(),
+                None::<String>,
+            ));
+        }
     }
 }

@@ -32,6 +32,7 @@ reth-network-api.workspace = true
 reth-node-api.workspace = true
 reth-trie-common = { workspace = true, features = ["eip1186"] }
 bincode = "1.3"
+serde_json.workspace = true
 
 # ethereum
 alloy-rlp.workspace = true

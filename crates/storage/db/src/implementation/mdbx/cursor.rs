@@ -20,6 +20,7 @@ use reth_db_api::{
 use reth_libmdbx::{Error as MDBXError, TransactionKind, WriteFlags, RO, RW};
 use reth_primitives::{Account, StorageEntry};
 use reth_storage_errors::db::{DatabaseErrorInfo, DatabaseWriteError, DatabaseWriteOperation};
+use reth_tracing::tracing::info;
 use std::{
     borrow::Cow,
     collections::Bound,
@@ -829,12 +830,15 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
         };
 
         if let Some(code) = table_code {
+            info!("upsert for table: {:?}", table_code);
             let mut client =
                 self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             let key = bincode::serialize(&key)
                 .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
             let value = bincode::serialize(&value)
                 .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
+            info!("key: {:?}", key);
+            info!("val: {:?}", value);
             return client
                 .upsert(code, self.id.to_vec(), key.as_slice(), &value)
                 .map_err(DatabaseError::from)
