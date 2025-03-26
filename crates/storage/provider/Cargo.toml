@@ -55,6 +55,10 @@ tracing.workspace = true
 reth-metrics.workspace = true
 metrics.workspace = true
 
+# arbitrary utils
+bincode.workspace = true
+uuid = { version = "1.13.1", features = ["v4"] }
+
 # misc
 auto_impl.workspace = true
 itertools.workspace = true

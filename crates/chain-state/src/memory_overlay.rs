@@ -10,11 +10,12 @@ use reth_storage_api::{
     StateRootProvider, StorageRootProvider,
 };
 use reth_trie::{
-    updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof,
-    MultiProofTargets, StorageMultiProof, TrieInput,
+    updates::TrieUpdates, AccountProof, CalculationMode, HashedPostState, HashedStorage, MultiProof, MultiProofTargets, StorageMultiProof, TrieInput
 };
 use revm::db::BundleState;
+use core::panic;
 use std::sync::OnceLock;
+use tracing::{info, debug};
 
 /// A state provider that stores references to in-memory blocks along with their state as well as a
 /// reference of the historical state provider for fallback lookups.
@@ -108,20 +109,41 @@ impl<N: NodePrimitives> AccountReader for MemoryOverlayStateProviderRef<'_, N> {
 }
 
 impl<N: NodePrimitives> StateRootProvider for MemoryOverlayStateProviderRef<'_, N> {
-    fn state_root(&self, state: HashedPostState) -> ProviderResult<B256> {
+    fn state_root(&self, mut state: HashedPostState) -> ProviderResult<B256> {
+        // panic!("IN MEMORY STATE ROOT");
+        debug!("IN MEMORY STATE ROOT");
+        info!(
+            "MemoryOverlayStateProvider: fallback historical provider type: {}",
+            std::any::type_name_of_val(&*self.historical)
+        );
+        state.calc_mode = Some(CalculationMode::InMemory);
         self.state_root_from_nodes(TrieInput::from_state(state))
     }
 
     fn state_root_from_nodes(&self, mut input: TrieInput) -> ProviderResult<B256> {
+        // panic!("IN MEMORY STATE ROOT FROM NODES");
+        debug!("IN MEMORY STATE ROOT FROM NODES");
+        info!(
+            "MemoryOverlayStateProvider: fallback historical provider type: {}",
+            std::any::type_name_of_val(&*self.historical)
+        );
         let MemoryOverlayTrieState { nodes, state } = self.trie_state().clone();
         input.prepend_cached(nodes, state);
+        input.state.calc_mode = Some(CalculationMode::InMemory);
         self.historical.state_root_from_nodes(input)
     }
 
     fn state_root_with_updates(
         &self,
-        state: HashedPostState,
+        mut state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
+        // panic!("IN MEMORY STATE ROOT WITH UPDATES");
+        debug!("IN MEMORY STATE ROOT WITH UPDATES");
+        info!(
+            "MemoryOverlayStateProvider: fallback historical provider type: {}",
+            std::any::type_name_of_val(&*self.historical)
+        );
+        state.calc_mode = Some(CalculationMode::InMemory);
         self.state_root_from_nodes_with_updates(TrieInput::from_state(state))
     }
 
@@ -129,8 +151,15 @@ impl<N: NodePrimitives> StateRootProvider for MemoryOverlayStateProviderRef<'_, 
         &self,
         mut input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
+        // panic!("IN MEMORY STATE ROOT FROM NODES WITH UPDATES");
+        debug!("IN MEMORY STATE ROOT FROM NODES WITH UPDATES");
+        info!(
+            "MemoryOverlayStateProvider: fallback historical provider type: {}",
+            std::any::type_name_of_val(&*self.historical)
+        );
         let MemoryOverlayTrieState { nodes, state } = self.trie_state().clone();
         input.prepend_cached(nodes, state);
+        input.state.calc_mode = Some(CalculationMode::InMemory);
         self.historical.state_root_from_nodes_with_updates(input)
     }
 }
@@ -209,6 +238,7 @@ impl<N: NodePrimitives> StateProofProvider for MemoryOverlayStateProviderRef<'_,
 
 impl<N: NodePrimitives> HashedPostStateProvider for MemoryOverlayStateProviderRef<'_, N> {
     fn hashed_post_state(&self, bundle_state: &BundleState) -> HashedPostState {
+        info!("BUNDLE STATE IN IN MEMORY: {:?}", bundle_state);
         self.historical.hashed_post_state(bundle_state)
     }
 }

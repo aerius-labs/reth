@@ -15,6 +15,7 @@ use reth_trie::{
     hashed_cursor::HashedPostStateCursorFactory, trie_cursor::InMemoryTrieCursorFactory,
     updates::TrieUpdates, HashedPostState, HashedStorage, KeccakKeyHasher, KeyHasher, StateRoot,
     StateRootProgress, TrieInput,
+    CalculationMode,
 };
 use std::{collections::HashMap, ops::RangeInclusive};
 use tracing::debug;
@@ -169,13 +170,20 @@ impl<'a, TX: DbTx> DatabaseStateRoot<'a, TX>
     }
 
     fn overlay_root(tx: &'a TX, post_state: HashedPostState) -> Result<B256, StateRootError> {
+        let calc_mode = match post_state.clone().calc_mode {
+            Some(mode) => mode,
+            None => CalculationMode::Latest,
+        };
+
         let prefix_sets = post_state.construct_prefix_sets().freeze();
         let state_sorted = post_state.into_sorted();
+       
         StateRoot::new(
             DatabaseTrieCursorFactory::new(tx),
             HashedPostStateCursorFactory::new(DatabaseHashedCursorFactory::new(tx), &state_sorted),
         )
         .with_prefix_sets(prefix_sets)
+        .with_mode(calc_mode)
         .root()
     }
 
@@ -183,6 +191,11 @@ impl<'a, TX: DbTx> DatabaseStateRoot<'a, TX>
         tx: &'a TX,
         post_state: HashedPostState,
     ) -> Result<(B256, TrieUpdates), StateRootError> {
+        let calc_mode = match post_state.clone().calc_mode {
+            Some(mode) => mode,
+            None => CalculationMode::Latest,
+        };
+
         let prefix_sets = post_state.construct_prefix_sets().freeze();
         let state_sorted = post_state.into_sorted();
         StateRoot::new(
@@ -190,10 +203,15 @@ impl<'a, TX: DbTx> DatabaseStateRoot<'a, TX>
             HashedPostStateCursorFactory::new(DatabaseHashedCursorFactory::new(tx), &state_sorted),
         )
         .with_prefix_sets(prefix_sets)
+        .with_mode(calc_mode)
         .root_with_updates()
     }
 
     fn overlay_root_from_nodes(tx: &'a TX, input: TrieInput) -> Result<B256, StateRootError> {
+        let calc_mode = match input.clone().state.calc_mode {
+            Some(mode) => mode,
+            None => CalculationMode::Latest,
+        };
         let state_sorted = input.state.into_sorted();
         let nodes_sorted = input.nodes.into_sorted();
         StateRoot::new(
@@ -201,6 +219,7 @@ impl<'a, TX: DbTx> DatabaseStateRoot<'a, TX>
             HashedPostStateCursorFactory::new(DatabaseHashedCursorFactory::new(tx), &state_sorted),
         )
         .with_prefix_sets(input.prefix_sets.freeze())
+        .with_mode(calc_mode)
         .root()
     }
 
@@ -208,6 +227,10 @@ impl<'a, TX: DbTx> DatabaseStateRoot<'a, TX>
         tx: &'a TX,
         input: TrieInput,
     ) -> Result<(B256, TrieUpdates), StateRootError> {
+        let calc_mode = match input.clone().state.calc_mode {
+            Some(mode) => mode,
+            None => CalculationMode::Latest,
+        };
         let state_sorted = input.state.into_sorted();
         let nodes_sorted = input.nodes.into_sorted();
         StateRoot::new(
@@ -215,6 +238,7 @@ impl<'a, TX: DbTx> DatabaseStateRoot<'a, TX>
             HashedPostStateCursorFactory::new(DatabaseHashedCursorFactory::new(tx), &state_sorted),
         )
         .with_prefix_sets(input.prefix_sets.freeze())
+        .with_mode(calc_mode)
         .root_with_updates()
     }
 }
@@ -259,7 +283,7 @@ impl<TX: DbTx> DatabaseHashedPostState<TX> for HashedPostState {
             })
             .collect();
 
-        Ok(Self { accounts: hashed_accounts, storages: hashed_storages })
+        Ok(Self { accounts: hashed_accounts, storages: hashed_storages, calc_mode: None })
     }
 }
 

@@ -826,6 +826,11 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
         let table_code = match T::NAME {
             "HashedAccounts" => Some(TABLE_CODE_HASHED_ACCOUNTS),
             "HashedStorages" => Some(TABLE_CODE_HASHED_STORAGES),
+            "PlainAccountState" => {
+                println!("UPSERT PlainAccountStateKEY: {:?}", key);
+                println!("UPSERT PlainAccountStateVALUE: {:?}", value);
+                None
+            },
             _ => None,
         };
 

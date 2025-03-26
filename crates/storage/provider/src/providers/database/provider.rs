@@ -75,7 +75,7 @@ use std::{
     sync::{mpsc, Arc},
 };
 use tokio::sync::watch;
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 /// A [`DatabaseProvider`] that holds a read-only database transaction.
 pub type DatabaseProviderRO<DB, N> = DatabaseProvider<<DB as Database>::TX, N>;
@@ -1945,6 +1945,8 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypesForProvider> StateWriter
     }
 
     fn write_hashed_state(&self, hashed_state: &HashedPostStateSorted) -> ProviderResult<()> {
+        info!("WRITING HASHED STATE");
+        info!("HASHED_STATE: {:?}", hashed_state);
         // Write hashed account updates.
         let mut hashed_accounts_cursor = self.tx_ref().cursor_write::<tables::HashedAccounts>()?;
         for (hashed_address, account) in hashed_state.accounts().accounts_sorted() {
@@ -2356,13 +2358,31 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes> HashingWriter for DatabaseProvi
         changesets: impl IntoIterator<Item = (Address, Option<Account>)>,
     ) -> ProviderResult<BTreeMap<B256, Option<Account>>> {
         let mut hashed_accounts_cursor = self.tx.cursor_write::<tables::HashedAccounts>()?;
-        let hashed_accounts =
-            changesets.into_iter().map(|(ad, ac)| (keccak256(ad), ac)).collect::<BTreeMap<_, _>>();
+        let hashed_accounts = changesets.into_iter().map(|(ad, ac)| {
+            let hash = keccak256(ad);
+            info!(target: "provider::hashing", "Processing account: {:?} -> {:?}", ad, hash);
+            (hash, ac)
+        }).collect::<BTreeMap<_, _>>();
         for (hashed_address, account) in &hashed_accounts {
-            if let Some(account) = account {
-                hashed_accounts_cursor.upsert(*hashed_address, *account)?;
-            } else if hashed_accounts_cursor.seek_exact(*hashed_address)?.is_some() {
-                hashed_accounts_cursor.delete_current()?;
+            // if let Some(account) = account {
+            //     hashed_accounts_cursor.upsert(*hashed_address, *account)?;
+            // } else if hashed_accounts_cursor.seek_exact(*hashed_address)?.is_some() {
+            //     hashed_accounts_cursor.delete_current()?;
+            // }
+
+            match account {
+                Some(account_value) => {
+                    info!(target: "provider::hashing", "Upserting account at hashed key: {:?} with value: {:?}", hashed_address, account_value);
+                    hashed_accounts_cursor.upsert(*hashed_address, *account_value)?;
+                }
+                None => {
+                    if let Some(existing) = hashed_accounts_cursor.seek_exact(*hashed_address)? {
+                        info!(target: "provider::hashing", "Deleting existing account at hashed key: {:?}, value: {:?}", hashed_address, existing);
+                        hashed_accounts_cursor.delete_current()?;
+                    } else {
+                        info!(target: "provider::hashing", "No existing account found at hashed key: {:?} to delete", hashed_address);
+                    }
+                }
             }
         }
         Ok(hashed_accounts)

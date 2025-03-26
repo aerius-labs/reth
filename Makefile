@@ -525,4 +525,6 @@ start-reth-host: ## start a local ephemeral `reth` node on host machine
 	--http.api admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots \
 	--authrpc.addr "0.0.0.0" \
 	--authrpc.jwtsecret $(JWT_PATH) \
-	--datadir ${ETH_DATA_DIR}
+	--datadir ${ETH_DATA_DIR} \
+	--engine.persistence-threshold 0 \
+	--engine.memory-block-buffer-target 0

@@ -8835,6 +8835,7 @@ dependencies = [
  "alloy-rpc-types-engine",
  "assert_matches",
  "auto_impl",
+ "bincode",
  "dashmap",
  "eyre",
  "itertools 0.13.0",
@@ -8873,6 +8874,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

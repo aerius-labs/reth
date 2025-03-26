@@ -434,6 +434,11 @@ impl DbTxMut for Tx<RW> {
         let table_code = match T::NAME {
             "HashedAccounts" => Some(TABLE_CODE_HASHED_ACCOUNTS),
             "HashedStorages" => Some(TABLE_CODE_HASHED_STORAGES),
+            "PlainAccountState" => {
+                println!("PUT PlainAccountStateKEY: {:?}", key);
+                println!("PUT PlainAccountStateVALUE: {:?}", value);
+                None
+            },
             _ => None,
         };
 

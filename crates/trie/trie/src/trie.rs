@@ -8,12 +8,13 @@ use crate::{
     updates::{StorageTrieUpdates, TrieUpdates},
     walker::TrieWalker,
     HashBuilder, Nibbles, TRIE_ACCOUNT_RLP_MAX_SIZE,
+    state::CalculationMode,
 };
 use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::{keccak256, Address, B256};
 use alloy_rlp::{BufMut, Encodable};
 use reth_execution_errors::{StateRootError, StorageRootError};
-use tracing::trace;
+use tracing::{trace, info};
 
 #[cfg(feature = "metrics")]
 use crate::metrics::{StateRootMetrics, TrieRootMetrics};
@@ -34,6 +35,8 @@ pub struct StateRoot<T, H> {
     #[cfg(feature = "metrics")]
     /// State root metrics.
     metrics: StateRootMetrics,
+    /// type of calculation.
+    pub calc_mode: Option<CalculationMode>,
 }
 
 impl<T, H> StateRoot<T, H> {
@@ -43,6 +46,12 @@ impl<T, H> StateRoot<T, H> {
     /// The cursors created by given factories are then used to walk through the accounts and
     /// calculate the state root value with.
     pub fn new(trie_cursor_factory: T, hashed_cursor_factory: H) -> Self {
+        // let rx = ScalerizeStateClient::spawn_connect_thread();
+        // let client_result = rx.recv().map_err(|_| {
+        //     DatabaseError::Other("Connection thread terminated abnormally".to_string())
+        // })?;
+        // let scalerize_client =
+        //     Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
         Self {
             trie_cursor_factory,
             hashed_cursor_factory,
@@ -51,7 +60,16 @@ impl<T, H> StateRoot<T, H> {
             threshold: 100_000,
             #[cfg(feature = "metrics")]
             metrics: StateRootMetrics::default(),
+            // calc_mode: CalculationMode::Latest,
+            calc_mode: None,
+
         }
+    }
+
+    /// Set the calculation mode.
+    pub fn with_mode(mut self, mode: CalculationMode) -> Self {
+        self.calc_mode = Some(mode);
+        self
     }
 
     /// Set the prefix sets.
@@ -88,6 +106,7 @@ impl<T, H> StateRoot<T, H> {
             previous_state: self.previous_state,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
+            calc_mode: self.calc_mode,
         }
     }
 
@@ -101,6 +120,7 @@ impl<T, H> StateRoot<T, H> {
             previous_state: self.previous_state,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
+            calc_mode: self.calc_mode,
         }
     }
 }
@@ -149,6 +169,7 @@ where
     }
 
     fn calculate(self, retain_updates: bool) -> Result<StateRootProgress, StateRootError> {
+        info!("ROOT CALCULATING FOR CALCULATION MODE: {:?}", self.calc_mode);
         trace!(target: "trie::state_root", "calculating state root");
         let mut tracker = TrieTracker::default();
         let mut trie_updates = TrieUpdates::default();
@@ -256,6 +277,7 @@ where
 
         let root = hash_builder.root();
 
+        info!("ROOT: {:?}", root);
         let removed_keys = account_node_iter.walker.take_removed_keys();
         trie_updates.finalize(hash_builder, removed_keys, self.prefix_sets.destroyed_accounts);
 
@@ -291,6 +313,8 @@ pub struct StorageRoot<T, H> {
     /// Storage root metrics.
     #[cfg(feature = "metrics")]
     metrics: TrieRootMetrics,
+    /// type of calculation.
+    pub calc_mode: CalculationMode,
 }
 
 impl<T, H> StorageRoot<T, H> {
@@ -327,7 +351,14 @@ impl<T, H> StorageRoot<T, H> {
             prefix_set,
             #[cfg(feature = "metrics")]
             metrics,
+            calc_mode: CalculationMode::Latest,
         }
+    }
+
+    /// Set the calculation mode.
+    pub fn with_mode(mut self, mode: CalculationMode) -> Self {
+        self.calc_mode = mode;
+        self
     }
 
     /// Set the changed prefixes.
@@ -345,6 +376,7 @@ impl<T, H> StorageRoot<T, H> {
             prefix_set: self.prefix_set,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
+            calc_mode: self.calc_mode,
         }
     }
 
@@ -357,6 +389,7 @@ impl<T, H> StorageRoot<T, H> {
             prefix_set: self.prefix_set,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
+            calc_mode: self.calc_mode,
         }
     }
 }

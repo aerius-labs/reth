@@ -6,6 +6,7 @@ use crate::{
 use alloy_primitives::{map::B256HashSet, B256, U256};
 use reth_primitives::Account;
 use reth_storage_errors::db::DatabaseError;
+use tracing::info;
 
 /// The hashed cursor factory for the post state.
 #[derive(Clone, Debug)]
@@ -16,7 +17,8 @@ pub struct HashedPostStateCursorFactory<'a, CF> {
 
 impl<'a, CF> HashedPostStateCursorFactory<'a, CF> {
     /// Create a new factory.
-    pub const fn new(cursor_factory: CF, post_state: &'a HashedPostStateSorted) -> Self {
+    pub fn new(cursor_factory: CF, post_state: &'a HashedPostStateSorted) -> Self {
+        info!("HASHED POST STATE ACCOUNTS SORTED: {:?}", post_state.accounts);
         Self { cursor_factory, post_state }
     }
 }

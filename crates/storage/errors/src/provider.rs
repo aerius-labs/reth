@@ -15,6 +15,12 @@ pub enum ProviderError {
     /// Database error.
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Serialization error
+    #[error("{_0}")]
+    SerializationError(String),
+    /// Unexpected error
+    #[error("{_0}")]
+    UnexpectedError(String),
     /// RLP error.
     #[error("{_0}")]
     Rlp(alloy_rlp::Error),

@@ -29,7 +29,7 @@ pub mod walker;
 pub mod node_iter;
 
 /// In-memory hashed state.
-mod state;
+pub mod state;
 pub use state::*;
 
 /// Input for trie computation.
