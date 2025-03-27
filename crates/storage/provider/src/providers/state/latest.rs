@@ -166,16 +166,52 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
     fn state_root(&self, hashed_state: HashedPostState) -> ProviderResult<B256> {
         info!("LATEST STATE ROOT");
         info!("MODE: {:?}", hashed_state.calc_mode);
+
+        let hashed_state_sorted = hashed_state.clone().into_sorted();
+        self.write_hashed_state(&hashed_state_sorted)?;
+        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
+        //     .map_err(|err| ProviderError::Database(err.into()))
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
         // let hashed_state = hashed_state.into_sorted();
-        StateRoot::overlay_root(self.tx(), hashed_state)
-            .map_err(|err| ProviderError::Database(err.into()))
+        info!("SCALERIZE ROOT: {:?}", response);
+        let root = B256::from_slice(&response.unwrap());
+        Ok(root)
     }
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
         info!("LATEST STATE ROOT FROM NODES");
         info!("MODE: {:?}", input.state.calc_mode);
-        StateRoot::overlay_root_from_nodes(self.tx(), input)
-            .map_err(|err| ProviderError::Database(err.into()))
+
+        let hashed_state_sorted = input.state.clone().into_sorted();
+        self.write_hashed_state(&hashed_state_sorted)?;
+        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
+        //     .map_err(|err| ProviderError::Database(err.into()))
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
+        info!("SCALERIZE ROOT: {:?}", response);
+        let root = B256::from_slice(&response.unwrap());
+        Ok(root)
     }
 
     fn state_root_with_updates(
@@ -214,8 +250,25 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
     ) -> ProviderResult<(B256, TrieUpdates)> {
         info!("LATEST STATE ROOT FROM NODES WITH UPDATES");
         info!("MODE: {:?}", input.state.calc_mode);
-        StateRoot::overlay_root_from_nodes_with_updates(self.tx(), input)
-            .map_err(|err| ProviderError::Database(err.into()))
+        let hashed_state_sorted = input.state.clone().into_sorted();
+        self.write_hashed_state(&hashed_state_sorted)?;
+        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
+        //     .map_err(|err| ProviderError::Database(err.into()))
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
+        info!("SCALERIZE ROOT: {:?}", response);
+        let root = B256::from_slice(&response.unwrap());
+        Ok((root, TrieUpdates::default()))    
     }
 }
 
