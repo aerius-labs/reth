@@ -1,3 +1,4 @@
+use reth_storage_errors::db::DatabaseError;
 use std::{
     fmt,
     io::{Read, Write},
@@ -34,22 +35,22 @@ pub enum ClientError {
     InvalidResponse(String),
 }
 
-// impl From<ClientError> for DatabaseError {
-//     fn from(error: ClientError) -> Self {
-//         match error {
-//             ClientError::Io(err) => DatabaseError::Other(format!("IO error: {}", err)),
-//             ClientError::InvalidResponse(msg) => {
-//                 DatabaseError::Other(format!("Invalid response: {}", msg))
-//             }
-//             ClientError::InvalidRequest(msg) => {
-//                 DatabaseError::Other(format!("Invalid request: {}", msg))
-//             }
-//             ClientError::OperationFailed(msg) => {
-//                 DatabaseError::Other(format!("Operation failed: {}", msg))
-//             }
-//         }
-//     }
-// }
+impl From<ClientError> for DatabaseError {
+    fn from(error: ClientError) -> Self {
+        match error {
+            ClientError::Io(err) => DatabaseError::Other(format!("IO error: {}", err)),
+            ClientError::InvalidResponse(msg) => {
+                DatabaseError::Other(format!("Invalid response: {}", msg))
+            }
+            ClientError::InvalidRequest(msg) => {
+                DatabaseError::Other(format!("Invalid request: {}", msg))
+            }
+            ClientError::OperationFailed(msg) => {
+                DatabaseError::Other(format!("Operation failed: {}", msg))
+            }
+        }
+    }
+}
 
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -141,6 +142,29 @@ impl ScalerizeStateClient {
         request.extend_from_slice(block_spec_bytes);
         request.extend_from_slice(serialized_hashed_account_bytes);
         request.extend_from_slice(serialized_storage_keys_bytes);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = response[1..].to_vec();
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => Ok(Some(data)),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn state_root(&mut self, height: &[u8]) -> Result<Option<Vec<u8>>, ClientError> {
+        let mut request = vec![OP_STATE_ROOT];
+        request.extend_from_slice(height);
 
         self.stream.write_all(&request)?;
         self.stream.flush()?;

@@ -30,6 +30,9 @@ reth-tracing.workspace = true
 alloy-primitives.workspace = true
 alloy-consensus.workspace = true
 
+# tracing
+tracing.workspace = true
+
 # mdbx
 reth-libmdbx = { workspace = true, optional = true, features = [
     "return-borrowed",

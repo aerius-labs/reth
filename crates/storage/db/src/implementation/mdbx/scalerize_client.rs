@@ -8,6 +8,7 @@ use std::{
     thread,
     time::Duration,
 };
+use tracing::info;
 
 const OP_PUT: u8 = 1;
 const OP_GET: u8 = 2;
@@ -473,6 +474,7 @@ impl ScalerizeDBClient {
         key: &[u8],
         value: &[u8],
     ) -> Result<(), ClientError> {
+        info!("SCALERIZE UPSERT");
         let mut request = vec![OP_UPSERT, table_code];
         request.extend_from_slice(&cursor_id);
         request.extend_from_slice(key);

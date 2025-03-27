@@ -18,9 +18,10 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use reth_rpc_server_types::{result::internal_rpc_err, ToRpcResult};
 use tracing::{trace, info};
 use alloy_primitives::keccak256;
+use reth_provider::providers::ScalerizeStateClient;
 
 use crate::{
-    helpers::{EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, FullEthApi, ScalerizeStateClient},
+    helpers::{EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, FullEthApi},
     RpcBlock, RpcHeader, RpcReceipt, RpcTransaction,
 };
 

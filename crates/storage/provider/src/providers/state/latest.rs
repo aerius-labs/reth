@@ -1,11 +1,11 @@
 use crate::{
-    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader,
+    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, providers::ScalerizeStateClient,
     HashedPostStateProvider, StateProvider, StateRootProvider,
 };
 use alloy_primitives::{
     map::B256HashMap, Address, BlockNumber, Bytes, StorageKey, StorageValue, B256
 };
-use reth_db::{tables, mdbx::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES, scalerize_client::{ScalerizeDBClient, ClientError}}};
+use reth_db::{tables, mdbx::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES, scalerize_client::{ScalerizeDBClient, ClientError as ScalerizeClientError}}};
 use std::sync::{Arc, RwLock};
 use reth_primitives::{Account, StorageEntry, Bytecode};
 use reth_storage_api::{
@@ -62,6 +62,7 @@ impl<'b, Provider: DBProvider> LatestStateProviderRef<'b, Provider> {
     }
 
     fn write_hashed_state(&self, hashed_state: &HashedPostStateSorted) -> ProviderResult<()>{
+        info!("START LATEST WRITE HASHED STATE: {:?}", hashed_state);
         let uuid = Uuid::new_v4();
         let mut id_hashed_accounts = [0u8; 8];
         id_hashed_accounts.copy_from_slice(&uuid.as_bytes()[..8]);
@@ -71,11 +72,11 @@ impl<'b, Provider: DBProvider> LatestStateProviderRef<'b, Provider> {
         for (hashed_address, account) in hashed_state.accounts().accounts_sorted() {
             let key = bincode::serialize(&hashed_address)
                 .map_err(|_| ProviderError::SerializationError("Failed to serialize Key".to_string()))?;
-            let value = bincode::serialize(&account)
-                .map_err(|_| ProviderError::SerializationError("Failed to serialize Value".to_string()))?;
             if let Some(account) = account {
+                let value = bincode::serialize(&account)
+                .map_err(|_| ProviderError::SerializationError("Failed to serialize Value".to_string()))?;
                 client.upsert(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec(), key.as_slice(), &value)
-                .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+                .map_err(|e| ProviderError::Database(DatabaseError::from(ScalerizeClientError::from(e))))?;
             } else if client
                 .seek_exact(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec(), key.as_slice())
                 .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?
@@ -132,6 +133,7 @@ impl<'b, Provider: DBProvider> LatestStateProviderRef<'b, Provider> {
 
         client.write().map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
+        info!("COMPLETE");
         Ok(())
     }
 }
@@ -182,8 +184,28 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
     ) -> ProviderResult<(B256, TrieUpdates)> {
         info!("LATEST STATE ROOT WITH UPDATES");
         info!("MODE: {:?}", hashed_state.calc_mode);
-        StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
-            .map_err(|err| ProviderError::Database(err.into()))
+        let hashed_state_sorted = hashed_state.clone().into_sorted();
+        self.write_hashed_state(&hashed_state_sorted)?;
+        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
+        //     .map_err(|err| ProviderError::Database(err.into()))
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
+        // let deserialized_response: (B256, TrieUpdates) = bincode::deserialize(&response.unwrap())
+        //     .map_err(|_| ProviderError::SerializationError("Failed to deserialize response".to_string()))?;
+        // Ok(deserialized_response)
+        info!("SCALERIZE ROOT: {:?}", response);
+        let root = B256::from_slice(&response.unwrap());
+        Ok((root, TrieUpdates::default()))    
     }
 
     fn state_root_from_nodes_with_updates(
@@ -205,6 +227,7 @@ impl<Provider: DBProvider + StateCommitmentProvider> StorageRootProvider
         address: Address,
         hashed_storage: HashedStorage,
     ) -> ProviderResult<B256> {
+        info!("LATEST STORAGE ROOT");
         StorageRoot::overlay_root(self.tx(), address, hashed_storage)
             .map_err(|err| ProviderError::Database(err.into()))
     }

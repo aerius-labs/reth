@@ -13,7 +13,7 @@ use reth_storage_api::{DBProvider, StageCheckpointWriter, TransactionsProviderEx
 use reth_storage_errors::writer::UnifiedStorageWriterError;
 use revm::db::OriginalValuesKnown;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// [`UnifiedStorageWriter`] is responsible for managing the writing to storage with both database
 /// and static file providers.
@@ -175,9 +175,10 @@ where
             )?;
 
             // insert hashes and intermediate merkle nodes
-            self.database()
-                .write_hashed_state(&Arc::unwrap_or_clone(hashed_state).into_sorted())?;
-            self.database().write_trie_updates(&trie)?;
+            info!("HERE");
+            // self.database()
+            //     .write_hashed_state(&Arc::unwrap_or_clone(hashed_state).into_sorted())?;
+            // self.database().write_trie_updates(&trie)?;
         }
 
         // update history indices

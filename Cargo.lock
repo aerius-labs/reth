@@ -7030,6 +7030,7 @@ dependencies = [
  "tempfile",
  "test-fuzz",
  "thiserror 2.0.9",
+ "tracing",
  "uuid",
 ]
 
