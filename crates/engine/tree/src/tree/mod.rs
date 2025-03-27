@@ -40,8 +40,9 @@ use reth_primitives::{
     SealedHeader,
 };
 use reth_primitives_traits::Block;
+use reth_storage_errors::{db::DatabaseError};
 use reth_provider::{
-    providers::ConsistentDbView, BlockReader, DatabaseProviderFactory, ExecutionOutcome,
+    providers::{ConsistentDbView, state::{scalerize_db_client::{ScalerizeDBClient, ClientError}, scalerize_state_client::ScalerizeStateClient}}, BlockReader, DatabaseProviderFactory, ExecutionOutcome,
     HashedPostStateProvider, ProviderError, StateCommitmentProvider, StateProviderBox,
     StateProviderFactory, StateReader, StateRootProvider, TransactionVariant,
 };
@@ -57,7 +58,7 @@ use std::{
     ops::Bound,
     sync::{
         mpsc::{Receiver, RecvError, RecvTimeoutError, Sender},
-        Arc,
+        Arc, RwLock,
     },
     time::Instant,
 };
@@ -511,6 +512,8 @@ where
     invalid_block_hook: Box<dyn InvalidBlockHook<N>>,
     /// The engine API variant of this handler
     engine_kind: EngineApiKind,
+    // Scalerize client for DB operation
+    // scalerize_db_client: Arc<RwLock<ScalerizeDBClient>>,
 }
 
 impl<N, P: Debug, E: Debug, T: EngineTypes + Debug, V: Debug> std::fmt::Debug
@@ -573,6 +576,16 @@ where
         engine_kind: EngineApiKind,
     ) -> Self {
         let (incoming_tx, incoming) = std::sync::mpsc::channel();
+        // info!("NEW LATESTSTATEPROVIDERREF");
+        // let scalerize_db_client = loop {
+        //     match ScalerizeDBClient::connect() {
+        //         Ok(client) => break client,
+        //         Err(err) => {
+        //             println!("Failed to connect: {}. Retrying...", err);
+        //             thread::sleep(Duration::from_secs(1));
+        //         }
+        //     }
+        // };
 
         Self {
             provider,
@@ -592,6 +605,7 @@ where
             incoming_tx,
             invalid_block_hook: Box::new(NoopInvalidBlockHook),
             engine_kind,
+            // scalerize_db_client: Arc::new(RwLock::new(scalerize_db_client)),
         }
     }
 
@@ -2289,51 +2303,70 @@ where
         // finish parallel computation. It is important that nothing is being persisted as
         // we are computing in parallel, because we initialize a different database transaction
         // per thread and it might end up with a different view of the database.
-        let state_root_result = if persistence_not_in_progress {
-            // TODO: uncomment to use StateRootTask
+        // let state_root_result = if persistence_not_in_progress {
+        //     // TODO: uncomment to use StateRootTask
 
-            // if let Some(state_root_handle) = state_root_handle {
-            //     match state_root_handle.wait_for_result() {
-            //         Ok((task_state_root, task_trie_updates)) => {
-            //             info!(
-            //                 target: "engine::tree",
-            //                 block = ?sealed_block.num_hash(),
-            //                 ?task_state_root,
-            //                 "State root task finished"
-            //             );
-            //         }
-            //         Err(error) => {
-            //             info!(target: "engine::tree", ?error, "Failed to wait for state root task
-            // result");         }
-            //     }
-            // }
+        //     // if let Some(state_root_handle) = state_root_handle {
+        //     //     match state_root_handle.wait_for_result() {
+        //     //         Ok((task_state_root, task_trie_updates)) => {
+        //     //             info!(
+        //     //                 target: "engine::tree",
+        //     //                 block = ?sealed_block.num_hash(),
+        //     //                 ?task_state_root,
+        //     //                 "State root task finished"
+        //     //             );
+        //     //         }
+        //     //         Err(error) => {
+        //     //             info!(target: "engine::tree", ?error, "Failed to wait for state root task
+        //     // result");         }
+        //     //     }
+        //     // }
 
-            match self.compute_state_root_parallel(block.header().parent_hash(), &hashed_state) {
-                Ok(result) => Some(result),
-                Err(ParallelStateRootError::Provider(ProviderError::ConsistentView(error))) => {
-                    debug!(target: "engine", %error, "Parallel state root computation failed consistency check, falling back");
-                    None
-                }
-                Err(error) => return Err(InsertBlockErrorKindTwo::Other(Box::new(error))),
-            }
-        } else {
-            None
-        };
+        //     match self.compute_state_root_parallel(block.header().parent_hash(), &hashed_state) {
+        //         Ok(result) => Some(result),
+        //         Err(ParallelStateRootError::Provider(ProviderError::ConsistentView(error))) => {
+        //             debug!(target: "engine", %error, "Parallel state root computation failed consistency check, falling back");
+        //             None
+        //         }
+        //         Err(error) => return Err(InsertBlockErrorKindTwo::Other(Box::new(error))),
+        //     }
+        // } else {
+        //     None
+        // };
 
-        let (state_root, trie_output) = if let Some(result) = state_root_result {
-            result
-        } else {
-            debug!(target: "engine::tree", block=?sealed_block.num_hash(), ?persistence_not_in_progress, "Failed to compute state root in parallel");
-            state_provider.state_root_with_updates(hashed_state.clone())?
-        };
+        // let (state_root, trie_output) = if let Some(result) = state_root_result {
+        //     result
+        // } else {
+        //     debug!(target: "engine::tree", block=?sealed_block.num_hash(), ?persistence_not_in_progress, "Failed to compute state root in parallel");
+        //     state_provider.state_root_with_updates(hashed_state.clone())?
+        // };
 
+        let mut scalerize_db_client = ScalerizeDBClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        scalerize_db_client.write_hashed_state(&hashed_state.clone().into_sorted())?;
+        let height:i64 = -1;
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            let error = ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string());
+            return Err(InsertBlockErrorKindTwo::Other(Box::new(error)))
+        }
+
+        let state_root = B256::from_slice(&response.unwrap());
+
+        info!("CHECK");
         if state_root != block.header().state_root() {
             // call post-block hook
             self.invalid_block_hook.on_invalid_block(
                 &parent_block,
                 &block.clone().seal_slow(),
                 &output,
-                Some((&trie_output, state_root)),
+                Some((&TrieUpdates::default(), state_root)),
             );
             return Err(ConsensusError::BodyStateRootDiff(
                 GotExpected { got: state_root, expected: block.header().state_root() }.into(),
@@ -2342,7 +2375,7 @@ where
         }
 
         let root_elapsed = root_time.elapsed();
-        self.metrics.block_validation.record_state_root(&trie_output, root_elapsed.as_secs_f64());
+        self.metrics.block_validation.record_state_root(&TrieUpdates::default(), root_elapsed.as_secs_f64());
         debug!(target: "engine::tree", ?root_elapsed, block=?sealed_block.num_hash(), "Calculated state root");
 
         let executed: ExecutedBlock<N> = ExecutedBlock {
@@ -2350,7 +2383,7 @@ where
             senders: Arc::new(block.senders),
             execution_output: Arc::new(ExecutionOutcome::from((output, block_number))),
             hashed_state: Arc::new(hashed_state),
-            trie: Arc::new(trie_output),
+            trie: Arc::new(TrieUpdates::default()),
         };
 
         if self.state.tree_state.canonical_block_hash() == executed.block().parent_hash() {

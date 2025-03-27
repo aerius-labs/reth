@@ -20,6 +20,7 @@ reth-chainspec = { workspace = true, optional = true }
 reth-consensus.workspace = true
 reth-engine-primitives.workspace = true
 reth-errors.workspace = true
+reth-storage-errors.workspace = true
 reth-evm.workspace = true
 reth-network-p2p.workspace = true
 reth-payload-builder-primitives.workspace = true
