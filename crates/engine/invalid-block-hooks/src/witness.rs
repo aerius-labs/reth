@@ -17,7 +17,7 @@ use reth_revm::{
     primitives::EnvWithHandlerCfg, DatabaseCommit, StateBuilder,
 };
 use reth_rpc_api::DebugApiClient;
-use reth_tracing::tracing::warn;
+use reth_tracing::tracing::{warn, info};
 use reth_trie::{updates::TrieUpdates, HashedStorage};
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug, fs::File, io::Write, path::PathBuf};
@@ -238,11 +238,16 @@ where
             );
         }
 
+        info!("HASHED STATE: {:?}", hashed_state.clone().into_sorted());
+
         // Calculate the state root and trie updates after re-execution. They should match
         // the original ones.
         let (re_executed_root, trie_output) =
             state_provider.state_root_with_updates(hashed_state)?;
+
+        info!("RE EXECUTED ROOT: {:?}", re_executed_root);
         if let Some((original_updates, original_root)) = trie_updates {
+            info!("ORIGINAL ROOT {:?}", original_root);
             if re_executed_root != original_root {
                 let filename = format!("{}_{}.state_root.diff", block.number(), block.hash());
                 let diff_path = self.save_diff(filename, &re_executed_root, &original_root)?;
