@@ -2281,6 +2281,8 @@ where
 
         let hashed_state = self.provider.hashed_post_state(&output.state);
 
+        info!("HASHED STATE: {:?}", hashed_state.clone().into_sorted());
+
         trace!(target: "engine::tree", block=?sealed_block.num_hash(), "Calculating block state root");
         let root_time = Instant::now();
 
@@ -2326,6 +2328,10 @@ where
             debug!(target: "engine::tree", block=?sealed_block.num_hash(), ?persistence_not_in_progress, "Failed to compute state root in parallel");
             state_provider.state_root_with_updates(hashed_state.clone())?
         };
+
+        info!("CHECK");
+        info!("STATE ROOT: {:?}", state_root);
+        info!("BLOCK HEADER STATE ROOT: {:?}", block.header().state_root());
 
         if state_root != block.header().state_root() {
             // call post-block hook
