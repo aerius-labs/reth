@@ -23,6 +23,7 @@ use reth_trie_db::{
     DatabaseProof, DatabaseStateRoot, DatabaseStorageProof, DatabaseStorageRoot,
     DatabaseTrieWitness, StateCommitment,
 };
+use tracing::info;
 
 /// State provider over latest state that takes tx reference.
 ///
@@ -67,11 +68,13 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
     for LatestStateProviderRef<'_, Provider>
 {
     fn state_root(&self, hashed_state: HashedPostState) -> ProviderResult<B256> {
+        info!("HASHED STATE: {:?}", hashed_state.clone().into_sorted());
         StateRoot::overlay_root(self.tx(), hashed_state)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
+        info!("HASHED STATE: {:?}", input.state.clone().into_sorted());
         StateRoot::overlay_root_from_nodes(self.tx(), input)
             .map_err(|err| ProviderError::Database(err.into()))
     }
@@ -80,6 +83,7 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
         &self,
         hashed_state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
+        info!("HASHED STATE: {:?}", hashed_state.clone().into_sorted());
         StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
             .map_err(|err| ProviderError::Database(err.into()))
     }
@@ -88,6 +92,7 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
         &self,
         input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
+        info!("HASHED STATE: {:?}", input.state.clone().into_sorted());
         StateRoot::overlay_root_from_nodes_with_updates(self.tx(), input)
             .map_err(|err| ProviderError::Database(err.into()))
     }
