@@ -45,7 +45,7 @@ use reth_provider::{
     HashedPostStateProvider, ProviderError, StateCommitmentProvider, StateProviderBox,
     StateProviderFactory, StateReader, StateRootProvider, TransactionVariant,
 };
-use reth_revm::database::StateProviderDatabase;
+use reth_revm::{database::StateProviderDatabase, StateBuilder};
 use reth_stages_api::ControlFlow;
 use reth_trie::{updates::TrieUpdates, HashedPostState, TrieInput};
 use reth_trie_parallel::root::{ParallelStateRoot, ParallelStateRootError};
@@ -2280,8 +2280,14 @@ where
         }
 
         info!("BUNDLE STATE INSERT: {:?}", output.clone().state);
-        let hashed_state = self.provider.hashed_post_state(&output.state);
-        info!("HASHED STATE: {:?}", hashed_state.clone().into_sorted());
+        let mut db = StateBuilder::new()
+            .with_database(StateProviderDatabase::new(
+                self.provider.state_by_block_hash(parent_block.hash())?,
+            ))
+            .with_bundle_update()
+            .build();
+        let hashed_state = db.database.hashed_post_state(&output.state);
+        info!("HASHED STATE INSERT: {:?}", hashed_state.clone().into_sorted());
 
         trace!(target: "engine::tree", block=?sealed_block.num_hash(), "Calculating block state root");
         let root_time = Instant::now();
