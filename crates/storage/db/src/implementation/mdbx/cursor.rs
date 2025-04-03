@@ -824,8 +824,23 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
     /// found, before calling `upsert`.
     fn upsert(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
         let table_code = match T::NAME {
-            "HashedAccounts" => Some(TABLE_CODE_HASHED_ACCOUNTS),
-            "HashedStorages" => Some(TABLE_CODE_HASHED_STORAGES),
+            "HashedAccounts" => {
+                info!("RETH UPSERT");
+                Some(TABLE_CODE_HASHED_ACCOUNTS)}
+            "HashedStorages" => {
+                info!("RETH UPSERT");
+                Some(TABLE_CODE_HASHED_STORAGES)
+            }
+            "PlainAccountState" => {
+                println!("UPSERT PlainAccountStateKEY: {:?}", key);
+                println!("UPSERT PlainAccountStateVALUE: {:?}", value);
+                None
+            },
+            "PlainStorageState" => {
+                println!("UPSERT PlainStorageStateKEY: {:?}", key);
+                println!("UPSERT PlainStorageStateVALUE: {:?}", value);
+                None
+            },
             _ => None,
         };
 
