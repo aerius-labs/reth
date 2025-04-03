@@ -2279,7 +2279,9 @@ where
             return Err(err.into())
         }
 
+        info!("BUNDLE STATE INSERT: {:?}", output.clone().state);
         let hashed_state = self.provider.hashed_post_state(&output.state);
+        info!("HASHED STATE: {:?}", hashed_state.clone().into_sorted());
 
         trace!(target: "engine::tree", block=?sealed_block.num_hash(), "Calculating block state root");
         let root_time = Instant::now();

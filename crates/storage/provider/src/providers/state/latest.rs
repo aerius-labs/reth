@@ -23,6 +23,7 @@ use reth_trie_db::{
     DatabaseProof, DatabaseStateRoot, DatabaseStorageProof, DatabaseStorageRoot,
     DatabaseTrieWitness, StateCommitment,
 };
+use tracing::info;
 
 /// State provider over latest state that takes tx reference.
 ///
@@ -159,6 +160,7 @@ impl<Provider: DBProvider + StateCommitmentProvider> HashedPostStateProvider
     for LatestStateProviderRef<'_, Provider>
 {
     fn hashed_post_state(&self, bundle_state: &revm::db::BundleState) -> HashedPostState {
+        info!("BUNDLE STATE IN LATEST: {:?}", bundle_state);
         HashedPostState::from_bundle_state::<
             <Provider::StateCommitment as StateCommitment>::KeyHasher,
         >(bundle_state.state())

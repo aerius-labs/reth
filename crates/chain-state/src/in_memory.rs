@@ -1050,6 +1050,7 @@ mod tests {
 
     impl HashedPostStateProvider for MockStateProvider {
         fn hashed_post_state(&self, _bundle_state: &revm::db::BundleState) -> HashedPostState {
+            info!("BUNDLE STATE IN IN MEMORY: {:?}", bundle_state);
             HashedPostState::default()
         }
     }
