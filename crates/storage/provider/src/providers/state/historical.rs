@@ -30,6 +30,7 @@ use reth_trie_db::{
     DatabaseStorageProof, DatabaseStorageRoot, DatabaseTrieWitness, StateCommitment,
 };
 use std::fmt::Debug;
+use tracing::info;
 
 /// State provider for a given block number which takes a tx reference.
 ///
@@ -398,6 +399,7 @@ impl<Provider: StateCommitmentProvider> HashedPostStateProvider
     for HistoricalStateProviderRef<'_, Provider>
 {
     fn hashed_post_state(&self, bundle_state: &revm::db::BundleState) -> HashedPostState {
+        info!("BUNDLE STATE IN HISTORICAL: {:?}", bundle_state);
         HashedPostState::from_bundle_state::<
             <Provider::StateCommitment as StateCommitment>::KeyHasher,
         >(bundle_state.state())

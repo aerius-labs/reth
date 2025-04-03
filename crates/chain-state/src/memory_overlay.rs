@@ -15,6 +15,7 @@ use reth_trie::{
 };
 use revm::db::BundleState;
 use std::sync::OnceLock;
+use tracing::info;
 
 /// A state provider that stores references to in-memory blocks along with their state as well as a
 /// reference of the historical state provider for fallback lookups.
@@ -209,6 +210,7 @@ impl<N: NodePrimitives> StateProofProvider for MemoryOverlayStateProviderRef<'_,
 
 impl<N: NodePrimitives> HashedPostStateProvider for MemoryOverlayStateProviderRef<'_, N> {
     fn hashed_post_state(&self, bundle_state: &BundleState) -> HashedPostState {
+        info!("BUNDLE STATE IN IN MEMORY: {:?}", bundle_state);
         self.historical.hashed_post_state(bundle_state)
     }
 }
