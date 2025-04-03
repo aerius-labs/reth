@@ -836,6 +836,11 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
                 println!("UPSERT PlainAccountStateVALUE: {:?}", value);
                 None
             },
+            "PlainStorageState" => {
+                println!("UPSERT PlainStorageStateKEY: {:?}", key);
+                println!("UPSERT PlainStorageStateVALUE: {:?}", value);
+                None
+            },
             _ => None,
         };
 
