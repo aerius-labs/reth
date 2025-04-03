@@ -176,9 +176,9 @@ where
 
             // insert hashes and intermediate merkle nodes
             info!("HERE");
-            // self.database()
-            //     .write_hashed_state(&Arc::unwrap_or_clone(hashed_state).into_sorted())?;
-            // self.database().write_trie_updates(&trie)?;
+            self.database()
+                .write_hashed_state(&Arc::unwrap_or_clone(hashed_state).into_sorted())?;
+            self.database().write_trie_updates(&trie)?;
         }
 
         // update history indices

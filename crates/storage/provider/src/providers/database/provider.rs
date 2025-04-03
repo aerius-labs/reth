@@ -3038,8 +3038,8 @@ impl<TX: DbTxMut + DbTx + 'static, N: NodeTypesForProvider + 'static> BlockWrite
         durations_recorder.record_relative(metrics::Action::InsertState);
 
         // insert hashes and intermediate merkle nodes
-        // self.write_hashed_state(&hashed_state)?;
-        // self.write_trie_updates(&trie_updates)?;
+        self.write_hashed_state(&hashed_state)?;
+        self.write_trie_updates(&trie_updates)?;
         durations_recorder.record_relative(metrics::Action::InsertHashes);
 
         self.update_history_indices(first_number..=last_block_number)?;
