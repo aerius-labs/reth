@@ -2341,23 +2341,26 @@ where
         //     state_provider.state_root_with_updates(hashed_state.clone())?
         // };
 
-        let mut scalerize_db_client = ScalerizeDBClient::connect()
-        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+        // let mut scalerize_db_client = ScalerizeDBClient::connect()
+        // .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
-        let mut scalerize_state_client = ScalerizeStateClient::connect()
-        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+        // let mut scalerize_state_client = ScalerizeStateClient::connect()
+        // .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
-        scalerize_db_client.write_hashed_state(&hashed_state.clone().into_sorted())?;
-        let height:i64 = -1;
-        let response = scalerize_state_client.state_root(&height.to_be_bytes())
-            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+        // scalerize_db_client.write_hashed_state(&hashed_state.clone().into_sorted())?;
+        // let height:i64 = -1;
+        // let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            // .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
-        if response.is_none() {
-            let error = ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string());
-            return Err(InsertBlockErrorKindTwo::Other(Box::new(error)))
-        }
+        let state_root = state_provider.state_root(hashed_state.clone())
+        .map_err(|e| ProviderError::from(e))?;
 
-        let state_root = B256::from_slice(&response.unwrap());
+        // if response.is_none() {
+        //     let error = ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string());
+        //     return Err(InsertBlockErrorKindTwo::Other(Box::new(error)))
+        // }
+
+        // let state_root = B256::from_slice(state_root);
 
         info!("CHECK");
         if state_root != block.header().state_root() {
