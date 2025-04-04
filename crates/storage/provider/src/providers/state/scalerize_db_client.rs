@@ -242,10 +242,9 @@ impl ScalerizeDBClient {
         }
     }
 
-    pub fn write(&mut self) -> Result<(), ClientError> {
-        let store_number: u8 = 0;
+    pub fn write(&mut self, cursor_id: Vec<u8>) -> Result<(), ClientError> {
         let mut request = vec![OP_WRITE];
-        request.extend_from_slice(&store_number.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
 
         self.stream.write_all(&request)?;
         self.stream.flush()?;
@@ -756,6 +755,9 @@ impl ScalerizeDBClient {
             }
         }
 
+        self.write(uuid.as_bytes().to_vec()).map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+
         let uuid = Uuid::new_v4();
         let mut id_hashed_storages = [0u8; 8];
         id_hashed_storages.copy_from_slice(&uuid.as_bytes()[..8]);
@@ -801,7 +803,7 @@ impl ScalerizeDBClient {
             }
         }
 
-        self.write().map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+        self.write(uuid.as_bytes().to_vec()).map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
         info!("COMPLETE");
         Ok(())
