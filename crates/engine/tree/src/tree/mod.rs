@@ -42,10 +42,11 @@ use reth_primitives::{
 use reth_primitives_traits::Block;
 use reth_storage_errors::{db::DatabaseError};
 use reth_provider::{
-    providers::{ConsistentDbView, state::{scalerize_db_client::{ScalerizeDBClient, ClientError}, scalerize_state_client::ScalerizeStateClient}}, BlockReader, DatabaseProviderFactory, ExecutionOutcome,
+    providers::{ConsistentDbView, state::{scalerize_state_client::ScalerizeStateClient}}, BlockReader, DatabaseProviderFactory, ExecutionOutcome,
     HashedPostStateProvider, ProviderError, StateCommitmentProvider, StateProviderBox,
     StateProviderFactory, StateReader, StateRootProvider, TransactionVariant,
 };
+use reth_db::mdbx::{scalerize_db_client::{ScalerizeDBClient, ClientError}};
 use reth_revm::database::StateProviderDatabase;
 use reth_stages_api::ControlFlow;
 use reth_trie::{updates::TrieUpdates, HashedPostState, TrieInput};

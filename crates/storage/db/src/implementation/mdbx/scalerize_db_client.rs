@@ -1,5 +1,5 @@
+use super::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES};
 use reth_storage_errors::{db::DatabaseError, provider::{ProviderResult, ProviderError}};
-use reth_db::{tables, mdbx::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES}};
 use reth_primitives::{Account, StorageEntry, Bytecode};
 use reth_trie::HashedPostStateSorted;
 use itertools::Itertools;

@@ -24,6 +24,7 @@ reth-nippy-jar.workspace = true
 reth-prune-types.workspace = true
 reth-stages-types.workspace = true
 reth-trie-common = { workspace = true, features = ["serde"] }
+reth-trie.workspace = true
 reth-tracing.workspace = true
 
 # ethereum
@@ -56,6 +57,7 @@ derive_more.workspace = true
 rustc-hash = { workspace = true, optional = true }
 sysinfo = { version = "0.32", default-features = false, features = ["system"] }
 parking_lot = { workspace = true, optional = true }
+itertools.workspace = true
 
 # arbitrary utils
 strum = { workspace = true, features = ["derive"], optional = true }

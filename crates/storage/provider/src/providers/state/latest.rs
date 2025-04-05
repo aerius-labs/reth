@@ -1,11 +1,12 @@
 use crate::{
     providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, providers::ScalerizeStateClient,
-    HashedPostStateProvider, StateProvider, StateRootProvider, providers::state::scalerize_db_client::{ScalerizeDBClient, ClientError}
+    HashedPostStateProvider, StateProvider, StateRootProvider, 
+    // providers::state::scalerize_db_client::{ScalerizeDBClient, ClientError}
 };
 use alloy_primitives::{
     map::B256HashMap, Address, BlockNumber, Bytes, StorageKey, StorageValue, B256
 };
-use reth_db::{tables, mdbx::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES }};
+use reth_db::{tables, mdbx::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES, scalerize_db_client::{ScalerizeDBClient, ClientError}}};
 use std::sync::{Arc, RwLock};
 use reth_primitives::{Account, StorageEntry, Bytecode};
 use reth_storage_api::{
