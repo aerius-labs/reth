@@ -842,7 +842,7 @@ where
         for key in keys.clone() {
             println!("STORAGE KEY INPUT: {:?}", key);
             if let JsonStorageKey::Hash(hash) = key {
-                let serialized = bincode::serialize(&hash).map_err(|e| {
+                let serialized = bincode::serialize(&keccak256(hash)).map_err(|e| {
                     jsonrpsee_types::error::ErrorObjectOwned::owned(
                         jsonrpsee_types::error::INTERNAL_ERROR_CODE,
                         format!("Bincode serialization error: {e}"),
