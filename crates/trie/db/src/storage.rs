@@ -5,7 +5,6 @@ use reth_db_api::transaction::DbTx;
 use reth_execution_errors::StorageRootError;
 use reth_trie::{
     hashed_cursor::HashedPostStateCursorFactory, HashedPostState, HashedStorage, StorageRoot,
-    CalculationMode,
 };
 
 #[cfg(feature = "metrics")]
@@ -64,10 +63,6 @@ impl<'a, TX: DbTx> DatabaseStorageRoot<'a, TX>
         address: Address,
         hashed_storage: HashedStorage,
     ) -> Result<B256, StorageRootError> {
-        let calc_mode = match hashed_storage.clone().calc_mode {
-            Some(mode) => mode,
-            None => CalculationMode::Latest,
-        };
         let prefix_set = hashed_storage.construct_prefix_set().freeze();
         let state_sorted =
             HashedPostState::from_hashed_storage(keccak256(address), hashed_storage).into_sorted();
@@ -79,7 +74,6 @@ impl<'a, TX: DbTx> DatabaseStorageRoot<'a, TX>
             #[cfg(feature = "metrics")]
             TrieRootMetrics::new(TrieType::Storage),
         )
-        .with_mode(calc_mode)
         .root()
     }
 }

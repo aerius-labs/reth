@@ -8,7 +8,6 @@ use crate::{
     updates::{StorageTrieUpdates, TrieUpdates},
     walker::TrieWalker,
     HashBuilder, Nibbles, TRIE_ACCOUNT_RLP_MAX_SIZE,
-    state::CalculationMode,
 };
 use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::{keccak256, Address, B256};
@@ -35,8 +34,6 @@ pub struct StateRoot<T, H> {
     #[cfg(feature = "metrics")]
     /// State root metrics.
     metrics: StateRootMetrics,
-    /// type of calculation.
-    pub calc_mode: Option<CalculationMode>,
 }
 
 impl<T, H> StateRoot<T, H> {
@@ -60,16 +57,7 @@ impl<T, H> StateRoot<T, H> {
             threshold: 100_000,
             #[cfg(feature = "metrics")]
             metrics: StateRootMetrics::default(),
-            // calc_mode: CalculationMode::Latest,
-            calc_mode: None,
-
         }
-    }
-
-    /// Set the calculation mode.
-    pub fn with_mode(mut self, mode: CalculationMode) -> Self {
-        self.calc_mode = Some(mode);
-        self
     }
 
     /// Set the prefix sets.
@@ -106,7 +94,6 @@ impl<T, H> StateRoot<T, H> {
             previous_state: self.previous_state,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
-            calc_mode: self.calc_mode,
         }
     }
 
@@ -120,7 +107,6 @@ impl<T, H> StateRoot<T, H> {
             previous_state: self.previous_state,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
-            calc_mode: self.calc_mode,
         }
     }
 }
@@ -169,8 +155,6 @@ where
     }
 
     fn calculate(self, retain_updates: bool) -> Result<StateRootProgress, StateRootError> {
-        info!("ROOT CALCULATING FOR CALCULATION MODE: {:?}", self.calc_mode);
-        trace!(target: "trie::state_root", "calculating state root");
         let mut tracker = TrieTracker::default();
         let mut trie_updates = TrieUpdates::default();
 
@@ -313,8 +297,6 @@ pub struct StorageRoot<T, H> {
     /// Storage root metrics.
     #[cfg(feature = "metrics")]
     metrics: TrieRootMetrics,
-    /// type of calculation.
-    pub calc_mode: CalculationMode,
 }
 
 impl<T, H> StorageRoot<T, H> {
@@ -351,14 +333,7 @@ impl<T, H> StorageRoot<T, H> {
             prefix_set,
             #[cfg(feature = "metrics")]
             metrics,
-            calc_mode: CalculationMode::Latest,
         }
-    }
-
-    /// Set the calculation mode.
-    pub fn with_mode(mut self, mode: CalculationMode) -> Self {
-        self.calc_mode = mode;
-        self
     }
 
     /// Set the changed prefixes.
@@ -376,7 +351,6 @@ impl<T, H> StorageRoot<T, H> {
             prefix_set: self.prefix_set,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
-            calc_mode: self.calc_mode,
         }
     }
 
@@ -389,7 +363,6 @@ impl<T, H> StorageRoot<T, H> {
             prefix_set: self.prefix_set,
             #[cfg(feature = "metrics")]
             metrics: self.metrics,
-            calc_mode: self.calc_mode,
         }
     }
 }

@@ -1,6 +1,6 @@
 use super::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES};
 use reth_storage_errors::{db::DatabaseError, provider::{ProviderResult, ProviderError}};
-use reth_primitives::{Account, StorageEntry, Bytecode};
+use reth_primitives::StorageEntry;
 use reth_trie::HashedPostStateSorted;
 use itertools::Itertools;
 use std::{
@@ -35,7 +35,6 @@ const OP_DELETE_CURRENT: u8 = 15;
 
 const OP_NEXT_DUP: u8 = 16;
 const OP_NEXT_NO_DUP: u8 = 17;
-const OP_NEXT_DUP_VAL: u8 = 18;
 const OP_SEEK_BY_KEY_SUBKEY: u8 = 19;
 
 const OP_DELETE_CURRENT_DUPLICATE: u8 = 20;
@@ -166,7 +165,7 @@ impl ScalerizeDBClient {
         Ok(response)
     }
 
-    pub fn get(&mut self, table_code: u8, key: &[u8]) -> Result<Option<(Vec<u8>)>, ClientError> {
+    pub fn get(&mut self, table_code: u8, key: &[u8]) -> Result<Option<Vec<u8>>, ClientError> {
         let mut request = vec![OP_GET];
         request.extend_from_slice(&table_code.to_be_bytes());
         request.extend_from_slice(key);

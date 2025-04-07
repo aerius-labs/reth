@@ -122,9 +122,7 @@ where
         number: BlockNumberOrTag,
         full: bool,
     ) -> Result<Option<RpcBlock<Eth::NetworkTypes>>> {
-        // println!("BLOCKBYNUMBER");
-        // self.eth.block_by_number(number, full).instrument(engine_span!()).await
-        Ok(None)
+        self.eth.block_by_number(number, full).instrument(engine_span!()).await
     }
 
     /// Handler for: `eth_sendRawTransaction`

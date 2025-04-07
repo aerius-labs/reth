@@ -1,34 +1,31 @@
 use crate::{
     providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, providers::ScalerizeStateClient,
     HashedPostStateProvider, StateProvider, StateRootProvider, 
-    // providers::state::scalerize_db_client::{ScalerizeDBClient, ClientError}
 };
 use alloy_primitives::{
     map::B256HashMap, Address, BlockNumber, Bytes, StorageKey, StorageValue, B256
 };
-use reth_db::{tables, mdbx::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES, scalerize_db_client::{ScalerizeDBClient, ClientError}}};
+use reth_db::{tables, mdbx::scalerize_db_client::ScalerizeDBClient};
 use std::sync::{Arc, RwLock};
-use reth_primitives::{Account, StorageEntry, Bytecode};
+use reth_primitives::{Account, Bytecode};
 use reth_storage_api::{
     DBProvider, StateCommitmentProvider, StateProofProvider, StorageRootProvider,
 };
-use itertools::Itertools;
 use reth_storage_errors::{provider::{ProviderResult, ProviderError}, db::DatabaseError};
 use reth_db_api::{cursor::DbDupCursorRO, transaction::DbTx};
 use reth_trie::{
     proof::{Proof, StorageProof},
     updates::TrieUpdates,
     witness::TrieWitness,
-    AccountProof, HashedPostState, HashedStorage, MultiProof, MultiProofTargets, StateRoot,
-    StorageMultiProof, StorageRoot, TrieInput, HashedPostStateSorted
+    AccountProof, HashedPostState, HashedStorage, MultiProof, MultiProofTargets,
+    StorageMultiProof, StorageRoot, TrieInput,
 };
 use reth_trie_db::{
-    DatabaseProof, DatabaseStateRoot, DatabaseStorageProof, DatabaseStorageRoot,
+    DatabaseProof, DatabaseStorageProof, DatabaseStorageRoot,
     DatabaseTrieWitness, StateCommitment,
 };
 use tracing::info;
 use std::{thread, time::Duration};
-use uuid::Uuid;
 
 /// State provider over latest state that takes tx reference.
 ///
@@ -61,82 +58,6 @@ impl<'b, Provider: DBProvider> LatestStateProviderRef<'b, Provider> {
     fn tx(&self) -> &Provider::Tx {
         self.db.tx_ref()
     }
-
-    // fn write_hashed_state(&self, hashed_state: &HashedPostStateSorted) -> ProviderResult<()>{
-    //     info!("START LATEST WRITE HASHED STATE: {:?}", hashed_state);
-    //     let uuid = Uuid::new_v4();
-    //     let mut id_hashed_accounts = [0u8; 8];
-    //     id_hashed_accounts.copy_from_slice(&uuid.as_bytes()[..8]);
-    //     let mut client = self.scalerize_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
-
-    //     // Write hashed account updates.
-    //     for (hashed_address, account) in hashed_state.accounts().accounts_sorted() {
-    //         let key = bincode::serialize(&hashed_address)
-    //             .map_err(|_| ProviderError::SerializationError("Failed to serialize Key".to_string()))?;
-    //         if let Some(account) = account {
-    //             let value = bincode::serialize(&account)
-    //             .map_err(|_| ProviderError::SerializationError("Failed to serialize Value".to_string()))?;
-    //             client.upsert(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec(), key.as_slice(), &value)
-    //             .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-    //         } else if client
-    //             .seek_exact(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec(), key.as_slice())
-    //             .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?
-    //             .is_some() {
-    //             client.delete_current(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec())
-    //             .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-    //         }
-    //     }
-
-    //     let uuid = Uuid::new_v4();
-    //     let mut id_hashed_storages = [0u8; 8];
-    //     id_hashed_storages.copy_from_slice(&uuid.as_bytes()[..8]);
-
-    //     // Write hashed storage changes.
-    //     let sorted_storages = hashed_state.account_storages().iter().sorted_by_key(|(key, _)| *key);
-    //     for (hashed_address, storage) in sorted_storages {
-    //         let key = bincode::serialize(&hashed_address)
-    //             .map_err(|_| ProviderError::SerializationError("Failed to serialize Key".to_string()))?;
-    //         if storage.is_wiped() && client.seek_exact(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec(), key.as_slice())
-    //         .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?
-    //         .is_some() {
-    //             client.delete_current_duplicates(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec())
-    //             .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-    //         }
-
-    //         for (hashed_slot, value) in storage.storage_slots_sorted() {
-    //             let entry = StorageEntry { key: hashed_slot, value };
-    //             let subkey = bincode::serialize(&entry.key)
-    //             .map_err(|_| DatabaseError::Other("Failed to serialize Subkey".to_string()))?;
-
-    //             if let Some(response) =
-    //                 client.seek_by_key_subkey(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec(), key.as_slice(), &subkey)
-    //                 .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?
-    //             {
-    //                 let db_entry: StorageEntry =
-    //                     bincode::deserialize(&response).map_err(|_| {
-    //                         DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
-    //                     })?;
-    //                 if db_entry.key == entry.key {
-    //                     client.delete_current(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec())
-    //                     .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-    //                 }
-    //             }
-
-    //             let value = bincode::serialize(&entry)
-    //             .map_err(|_| ProviderError::SerializationError("Failed to serialize Value".to_string()))?;
-
-    //             if !entry.value.is_zero() {
-    //                 client.upsert(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec(),key.as_slice(), &value)
-    //                 .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-    //             }
-    //         }
-    //     }
-
-    //     client.write().map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-
-    //     info!("COMPLETE");
-    //     Ok(())
-    // }
 }
 
 impl<Provider: DBProvider> AccountReader for LatestStateProviderRef<'_, Provider> {
@@ -166,7 +87,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
 {
     fn state_root(&self, hashed_state: HashedPostState) -> ProviderResult<B256> {
         info!("LATEST STATE ROOT");
-        info!("MODE: {:?}", hashed_state.calc_mode);
 
         let hashed_state_sorted = hashed_state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
@@ -193,7 +113,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
         info!("LATEST STATE ROOT FROM NODES");
-        info!("MODE: {:?}", input.state.calc_mode);
 
         let hashed_state_sorted = input.state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
@@ -222,7 +141,7 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
         hashed_state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
         info!("LATEST STATE ROOT WITH UPDATES");
-        info!("MODE: {:?}", hashed_state.calc_mode);
+
         let hashed_state_sorted = hashed_state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
         client.write_hashed_state(&hashed_state_sorted)?;
@@ -253,7 +172,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
         input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
         info!("LATEST STATE ROOT FROM NODES WITH UPDATES");
-        info!("MODE: {:?}", input.state.calc_mode);
         let hashed_state_sorted = input.state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
         client.write_hashed_state(&hashed_state_sorted)?;        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)

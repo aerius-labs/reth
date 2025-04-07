@@ -19,7 +19,7 @@ use reth_storage_api::{
 };
 use reth_storage_errors::provider::ProviderResult;
 use reth_trie::{
-    proof::{Proof, StorageProof}, updates::TrieUpdates, witness::TrieWitness, AccountProof, CalculationMode, HashedPostState, HashedStorage, MultiProof, MultiProofTargets, StateRoot, StorageMultiProof, StorageRoot, TrieInput
+    proof::{Proof, StorageProof}, updates::TrieUpdates, witness::TrieWitness, AccountProof, HashedPostState, HashedStorage, MultiProof, MultiProofTargets, StateRoot, StorageMultiProof, StorageRoot, TrieInput
 };
 use reth_trie_db::{
     DatabaseHashedPostState, DatabaseHashedStorage, DatabaseProof, DatabaseStateRoot,
@@ -289,12 +289,9 @@ impl<Provider: DBProvider + BlockNumReader + StateCommitmentProvider> StateRootP
     fn state_root(&self, hashed_state: HashedPostState) -> ProviderResult<B256> {
         info!("HISTORICAL STATE ROOT");
 
-        // hashed_state.calc_mode = Some(CalculationMode::Historical(self.block_number));
         let mut revert_state = self.revert_state()?;
 
         revert_state.extend(hashed_state);
-        revert_state.calc_mode = Some(CalculationMode::Historical(self.block_number));
-
         StateRoot::overlay_root(self.tx(), revert_state)
             .map_err(|err| ProviderError::Database(err.into()))
     }
@@ -302,21 +299,18 @@ impl<Provider: DBProvider + BlockNumReader + StateCommitmentProvider> StateRootP
     fn state_root_from_nodes(&self, mut input: TrieInput) -> ProviderResult<B256> {
         info!("HISTORICAL STATE ROOT FROM NODES");
         input.prepend(self.revert_state()?);
-        input.state.calc_mode = Some(CalculationMode::Historical(self.block_number));
         StateRoot::overlay_root_from_nodes(self.tx(), input)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn state_root_with_updates(
         &self,
-        mut hashed_state: HashedPostState,
+        hashed_state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
         info!("HISTORICAL STATE ROOT WITH UPDATES");
 
-        hashed_state.calc_mode = Some(CalculationMode::Historical(self.block_number));
         let mut revert_state = self.revert_state()?;
         revert_state.extend(hashed_state);
-        revert_state.calc_mode = Some(CalculationMode::Historical(self.block_number));
         StateRoot::overlay_root_with_updates(self.tx(), revert_state)
             .map_err(|err| ProviderError::Database(err.into()))
     }
@@ -327,9 +321,7 @@ impl<Provider: DBProvider + BlockNumReader + StateCommitmentProvider> StateRootP
     ) -> ProviderResult<(B256, TrieUpdates)> {
         info!("HISTORICAL STATE ROOT FROM NODES WITH UPDATES");
 
-        input.state.calc_mode = Some(CalculationMode::Historical(self.block_number));
         input.prepend(self.revert_state()?);
-        input.state.calc_mode = Some(CalculationMode::Historical(self.block_number));
         StateRoot::overlay_root_from_nodes_with_updates(self.tx(), input)
             .map_err(|err| ProviderError::Database(err.into()))
     }
@@ -341,9 +333,8 @@ impl<Provider: DBProvider + BlockNumReader + StateCommitmentProvider> StorageRoo
     fn storage_root(
         &self,
         address: Address,
-        mut hashed_storage: HashedStorage,
+        hashed_storage: HashedStorage,
     ) -> ProviderResult<B256> {
-        hashed_storage.calc_mode = Some(CalculationMode::Historical(self.block_number));
         let mut revert_storage = self.revert_storage(address)?;
         revert_storage.extend(&hashed_storage);
         StorageRoot::overlay_root(self.tx(), address, revert_storage)

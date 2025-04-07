@@ -40,13 +40,11 @@ use reth_primitives::{
     SealedHeader,
 };
 use reth_primitives_traits::Block;
-use reth_storage_errors::{db::DatabaseError};
 use reth_provider::{
-    providers::{ConsistentDbView, state::{scalerize_state_client::ScalerizeStateClient}}, BlockReader, DatabaseProviderFactory, ExecutionOutcome,
+    providers::ConsistentDbView, BlockReader, DatabaseProviderFactory, ExecutionOutcome,
     HashedPostStateProvider, ProviderError, StateCommitmentProvider, StateProviderBox,
     StateProviderFactory, StateReader, StateRootProvider, TransactionVariant,
 };
-use reth_db::mdbx::{scalerize_db_client::{ScalerizeDBClient, ClientError}};
 use reth_revm::database::StateProviderDatabase;
 use reth_stages_api::ControlFlow;
 use reth_trie::{updates::TrieUpdates, HashedPostState, TrieInput};
@@ -59,7 +57,7 @@ use std::{
     ops::Bound,
     sync::{
         mpsc::{Receiver, RecvError, RecvTimeoutError, Sender},
-        Arc, RwLock,
+        Arc,
     },
     time::Instant,
 };
@@ -513,8 +511,6 @@ where
     invalid_block_hook: Box<dyn InvalidBlockHook<N>>,
     /// The engine API variant of this handler
     engine_kind: EngineApiKind,
-    // Scalerize client for DB operation
-    // scalerize_db_client: Arc<RwLock<ScalerizeDBClient>>,
 }
 
 impl<N, P: Debug, E: Debug, T: EngineTypes + Debug, V: Debug> std::fmt::Debug
@@ -577,17 +573,6 @@ where
         engine_kind: EngineApiKind,
     ) -> Self {
         let (incoming_tx, incoming) = std::sync::mpsc::channel();
-        // info!("NEW LATESTSTATEPROVIDERREF");
-        // let scalerize_db_client = loop {
-        //     match ScalerizeDBClient::connect() {
-        //         Ok(client) => break client,
-        //         Err(err) => {
-        //             println!("Failed to connect: {}. Retrying...", err);
-        //             thread::sleep(Duration::from_secs(1));
-        //         }
-        //     }
-        // };
-
         Self {
             provider,
             executor_provider,
@@ -606,7 +591,6 @@ where
             incoming_tx,
             invalid_block_hook: Box::new(NoopInvalidBlockHook),
             engine_kind,
-            // scalerize_db_client: Arc::new(RwLock::new(scalerize_db_client)),
         }
     }
 
@@ -2239,8 +2223,6 @@ where
 
         let exec_time = Instant::now();
 
-        let persistence_not_in_progress = !self.persistence_state.in_progress();
-
         // TODO: uncomment to use StateRootTask
 
         // let (state_root_handle, state_hook) = if persistence_not_in_progress {
@@ -2355,13 +2337,6 @@ where
 
         let state_root = state_provider.state_root(hashed_state.clone())
         .map_err(|e| ProviderError::from(e))?;
-
-        // if response.is_none() {
-        //     let error = ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string());
-        //     return Err(InsertBlockErrorKindTwo::Other(Box::new(error)))
-        // }
-
-        // let state_root = B256::from_slice(state_root);
 
         info!("CHECK");
         if state_root != block.header().state_root() {

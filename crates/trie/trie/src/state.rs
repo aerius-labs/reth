@@ -12,14 +12,6 @@ use reth_trie_common::{KeyHasher};
 use revm::db::{states::CacheAccount, AccountStatus, BundleAccount};
 use std::borrow::Cow;
 
-/// Enum to tag the type of root calculation.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum CalculationMode {
-    Latest,
-    Historical(BlockNumber),
-    InMemory,
-}
-
 /// Representation of in-memory hashed state.
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub struct HashedPostState {
@@ -27,8 +19,6 @@ pub struct HashedPostState {
     pub accounts: B256HashMap<Option<Account>>,
     /// Mapping of hashed address to hashed storage.
     pub storages: B256HashMap<HashedStorage>,
-    /// Optional metadata indicating calculation mode.
-    pub calc_mode: Option<CalculationMode>,
 }
 
 impl HashedPostState {
@@ -57,7 +47,7 @@ impl HashedPostState {
             accounts.insert(address, account);
             storages.insert(address, storage);
         }
-        Self { accounts, storages, calc_mode: None }
+        Self { accounts, storages }
     }
 
     /// Initialize [`HashedPostState`] from cached state.
@@ -84,7 +74,7 @@ impl HashedPostState {
             accounts.insert(address, account);
             storages.insert(address, storage);
         }
-        Self { accounts, storages, calc_mode: None  }
+        Self { accounts, storages }
     }
 
     /// Construct [`HashedPostState`] from a single [`HashedStorage`].
@@ -92,7 +82,6 @@ impl HashedPostState {
         Self {
             accounts: HashMap::default(),
             storages: HashMap::from_iter([(hashed_address, storage)]),
-            calc_mode: None ,
         }
     }
 
@@ -220,19 +209,17 @@ pub struct HashedStorage {
     pub wiped: bool,
     /// Mapping of hashed storage slot to storage value.
     pub storage: B256HashMap<U256>,
-    /// Optional metadata indicating calculation mode.
-    pub calc_mode: Option<CalculationMode>,
 }
 
 impl HashedStorage {
     /// Create new instance of [`HashedStorage`].
     pub fn new(wiped: bool) -> Self {
-        Self { wiped, storage: HashMap::default(), calc_mode: None}
+        Self { wiped, storage: HashMap::default() }
     }
 
     /// Create new hashed storage from iterator.
     pub fn from_iter(wiped: bool, iter: impl IntoIterator<Item = (B256, U256)>) -> Self {
-        Self { wiped, storage: HashMap::from_iter(iter), calc_mode: None }
+        Self { wiped, storage: HashMap::from_iter(iter) }
     }
 
     /// Create new hashed storage from account status and plain storage.
