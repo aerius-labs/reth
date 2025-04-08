@@ -916,6 +916,7 @@ where
     
         // Update the proof response with account details.
         if let Some(acc) = account {
+            response.address = address;
             response.balance = acc.balance;
             response.nonce = acc.nonce;
             response.code_hash = acc.code_hash;
