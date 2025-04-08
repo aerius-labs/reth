@@ -527,4 +527,5 @@ start-reth-host: ## start a local ephemeral `reth` node on host machine
 	--authrpc.jwtsecret $(JWT_PATH) \
 	--datadir ${ETH_DATA_DIR} \
 	--engine.persistence-threshold 0 \
-	--engine.memory-block-buffer-target 0
+	--engine.memory-block-buffer-target 0 \
+	--rpc.eth-proof-window 1209600

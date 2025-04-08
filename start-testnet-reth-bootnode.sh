@@ -14,3 +14,4 @@ reth node \
     --authrpc.addr '0.0.0.0' \
     --authrpc.jwtsecret $JWT_PATH \
     --datadir $ETH_DATA_DIR \
+    --rpc.eth-proof-window 1209600 \
