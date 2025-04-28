@@ -50,4 +50,3 @@ reth node \
     --datadir $ETH_DATA_DIR \
     --trusted-peers $enode_url \
     --rpc.eth-proof-window 1209600 \
-    --engine.persistence-threshold 0 \
