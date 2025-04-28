@@ -361,11 +361,6 @@ impl<K: TransactionKind> DbTx for Tx<K> {
     }
 
     fn commit(self) -> Result<bool, DatabaseError> {
-        // if K::IS_READ_ONLY {
-        //     info!(target: "storage::db::commit", "Attempting to commit a read-only transaction");
-        // } else {
-        //     info!(target: "storage::db::commit", "Committing a read-write transaction");
-        // }
         self.execute_with_close_transaction_metric(TransactionOutcome::Commit, |this| {
             // First, commit the inner MDBX transaction.
             let commit_result = this.inner.commit().map_err(|e| DatabaseError::Commit(e.into()));

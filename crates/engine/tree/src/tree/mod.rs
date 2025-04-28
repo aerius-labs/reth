@@ -2173,7 +2173,6 @@ where
     ) -> Result<InsertPayloadOk2, InsertBlockErrorKindTwo> {
         debug!(target: "engine::tree", block=?block.num_hash(), parent = ?block.parent_hash(), state_root = ?block.state_root(), "Inserting new block into tree");
 
-        // self.wait_for_in_memory_update(block.parent_num_hash().number)?;
 
         if self.block_by_hash(block.hash())?.is_some() {
             return Ok(InsertPayloadOk2::AlreadySeen(BlockStatus2::Valid))
@@ -2189,7 +2188,6 @@ where
         let Some(state_provider) = self.state_provider(block.parent_hash())? else {
             // we don't have the state required to execute this block, buffering it and find the
             // missing parent block
-            // info!("DONT HAVE THE STATE REQUIRED TO EXECUTE THIS BLOCK");
             let missing_ancestor = self
                 .state
                 .buffer
@@ -2260,16 +2258,8 @@ where
         //     (None, Box::new(|_state: &EvmState| {}) as Box<dyn OnStateHook>)
         // };
         let state_hook = Box::new(|_state: &EvmState| {});
-        // info!(target: "engine::tree", block=?block.header().parent_hash(), "Fetching state before execution");
-        let state_before = self.canonical_in_memory_state.state_by_hash(block.header().parent_hash());
-        // info!(target: "engine::tree", ?state_before, "State before execution");
-        // info!(target: "engine::tree", block=?block_hash, "Executing block");
 
         let output = self.metrics.executor.execute_metered(executor, &block, state_hook)?;
-        // info!(target: "engine::tree", block=?block_hash, "Fetching state after execution");
-        let state_after = self.canonical_in_memory_state.state_by_hash(block_hash);
-        // info!(target: "engine::tree", ?state_after, "State after execution");
-        // trace!(target: "engine::tree", elapsed=?exec_time.elapsed(), ?block_number, "Executed block");
 
         if let Err(err) = self.consensus.validate_block_post_execution(
             &block,
@@ -2285,7 +2275,6 @@ where
             return Err(err.into())
         }
 
-        // info!("OUTPUT STATE: {:?}", output.state);
 
         let hashed_state = self.provider.hashed_post_state(&output.state);
 
@@ -2335,21 +2324,9 @@ where
         //     state_provider.state_root_with_updates(hashed_state.clone())?
         // };
 
-        // let mut scalerize_db_client = ScalerizeDBClient::connect()
-        // .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-
-        // let mut scalerize_state_client = ScalerizeStateClient::connect()
-        // .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-
-        // scalerize_db_client.write_hashed_state(&hashed_state.clone().into_sorted())?;
-        // let height:i64 = -1;
-        // let response = scalerize_state_client.state_root(&height.to_be_bytes())
-            // .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
-
         let state_root = state_provider.state_root(hashed_state.clone())
         .map_err(|e| ProviderError::from(e))?;
 
-        // info!("CHECK");
         if state_root != block.header().state_root() {
             // call post-block hook
             self.invalid_block_hook.on_invalid_block(
@@ -2377,11 +2354,8 @@ where
         };
 
         if self.state.tree_state.canonical_block_hash() == executed.block().parent_hash() {
-            // debug!(target: "engine::tree", pending = ?executed.block().num_hash() ,"updating pending block");
             // if the parent is the canonical head, we can insert the block as the pending block
             self.canonical_in_memory_state.set_pending_block(executed.clone());
-        } else {
-            // info!("PARENT BLOCK IS NOT THE CANONICAL BLOCK HASH");
         }
 
         self.state.tree_state.insert_executed(executed);

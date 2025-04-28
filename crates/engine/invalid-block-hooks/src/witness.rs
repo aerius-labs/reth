@@ -241,20 +241,15 @@ where
 
         // Calculate the state root and trie updates after re-execution. They should match
         // the original ones.
-        info!("UNKNOWN STATE ROOT WITH UPDATES");
-        info!("HASHED STATE IN INVALID BLOCK: {:?}", hashed_state.clone().into_sorted());
         let (re_executed_root, trie_output) =
             state_provider.state_root_with_updates(hashed_state)?;
         if let Some((original_updates, original_root)) = trie_updates {
-            info!("REEXECUTED ROOT: {:?}", re_executed_root);
-            info!("ORIGINAL ROOT: {:?}", original_root);
             if re_executed_root != original_root {
                 let filename = format!("{}_{}.state_root.diff", block.number(), block.hash());
                 let diff_path = self.save_diff(filename, &re_executed_root, &original_root)?;
                 warn!(target: "engine::invalid_block_hooks::witness", ?original_root, ?re_executed_root, diff_path = %diff_path.display(), "State root mismatch after re-execution");
             }
 
-            info!("BLOCK STATE ROOT: {:?}", block.state_root());
             // If the re-executed state root does not match the _header_ state root, also log that.
             if re_executed_root != block.state_root() {
                 let filename =

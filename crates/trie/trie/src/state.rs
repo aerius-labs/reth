@@ -3,7 +3,7 @@ use crate::{
     Nibbles,
 };
 use alloy_primitives::{
-    keccak256, map::{hash_map, B256HashMap, B256HashSet, HashMap, HashSet}, Address, BlockNumber, B256, U256
+    keccak256, map::{hash_map, B256HashMap, B256HashSet, HashMap, HashSet}, Address, B256, U256
 };
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
@@ -11,7 +11,6 @@ use reth_primitives::Account;
 use reth_trie_common::{KeyHasher};
 use revm::db::{states::CacheAccount, AccountStatus, BundleAccount};
 use std::borrow::Cow;
-use tracing::info;
 
 /// Representation of in-memory hashed state.
 #[derive(PartialEq, Eq, Clone, Default, Debug)]

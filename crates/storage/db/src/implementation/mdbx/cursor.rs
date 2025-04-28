@@ -825,27 +825,14 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
     fn upsert(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
         let table_code = match T::NAME {
             "HashedAccounts" => {
-                // info!("RETH UPSERT");
                 Some(TABLE_CODE_HASHED_ACCOUNTS)}
             "HashedStorages" => {
-                // info!("RETH UPSERT");
                 Some(TABLE_CODE_HASHED_STORAGES)
             }
-            "PlainAccountState" => {
-                // println!("UPSERT PlainAccountStateKEY: {:?}", key);
-                // println!("UPSERT PlainAccountStateVALUE: {:?}", value);
-                None
-            },
-            "PlainStorageState" => {
-                // println!("UPSERT PlainStorageStateKEY: {:?}", key);
-                // println!("UPSERT PlainStorageStateVALUE: {:?}", value);
-                None
-            },
             _ => None,
         };
 
         if let Some(code) = table_code {
-            // info!("upsert for table: {:?}", table_code);
             let mut client =
                 self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             let key = bincode::serialize(&key)
@@ -857,7 +844,6 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
             return client
                 .upsert(code, self.id.to_vec(), key.as_slice(), &value)
                 .map_err(DatabaseError::from)
-            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();
@@ -898,7 +884,6 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
             return client
                 .insert(code, self.id.to_vec(), key.as_slice(), &value)
                 .map_err(DatabaseError::from)
-            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();
@@ -941,7 +926,6 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
             return client
                 .append(code, self.id.to_vec(), key.as_slice(), &value)
                 .map_err(DatabaseError::from)
-            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();
@@ -976,7 +960,6 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
             let mut client =
                 self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             return client.delete_current(code, self.id.to_vec()).map_err(DatabaseError::from)
-            // return client.write().map_err(DatabaseError::from)
         }
 
         self.execute_with_operation_metric(Operation::CursorDeleteCurrent, None, |this| {
@@ -998,7 +981,6 @@ impl<T: DupSort> DbDupCursorRW<T> for Cursor<RW, T> {
             return client
                 .delete_current_duplicates(code, self.id.to_vec())
                 .map_err(DatabaseError::from)
-            // return client.write().map_err(DatabaseError::from)
         }
 
         self.execute_with_operation_metric(Operation::CursorDeleteCurrentDuplicates, None, |this| {
@@ -1023,7 +1005,6 @@ impl<T: DupSort> DbDupCursorRW<T> for Cursor<RW, T> {
             return client
                 .append_dup(code, self.id.to_vec(), key.as_slice(), &value)
                 .map_err(DatabaseError::from)
-            // return client.write().map_err(DatabaseError::from)
         }
 
         let key = key.encode();

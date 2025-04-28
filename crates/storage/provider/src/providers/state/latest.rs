@@ -24,7 +24,6 @@ use reth_trie_db::{
     DatabaseProof, DatabaseStorageProof, DatabaseStorageRoot,
     DatabaseTrieWitness, StateCommitment,
 };
-use tracing::info;
 use std::{thread, time::Duration};
 
 /// State provider over latest state that takes tx reference.
@@ -38,7 +37,6 @@ pub struct LatestStateProviderRef<'b, Provider> {
 
 impl<'b, Provider: DBProvider> LatestStateProviderRef<'b, Provider> {
     pub fn new(provider: &'b Provider) -> Self{
-        // info!("NEW LATESTSTATEPROVIDERREF");
         let client = loop {
             match ScalerizeDBClient::connect() {
                 Ok(client) => break client,
@@ -86,13 +84,9 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
     for LatestStateProviderRef<'_, Provider>
 {
     fn state_root(&self, hashed_state: HashedPostState) -> ProviderResult<B256> {
-        // info!("LATEST STATE ROOT");
-
         let hashed_state_sorted = hashed_state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
         client.write_hashed_state(&hashed_state_sorted)?;
-        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
-        //     .map_err(|err| ProviderError::Database(err.into()))
         let mut scalerize_state_client = ScalerizeStateClient::connect()
         .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
@@ -105,20 +99,15 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
             return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
         }
 
-        // let hashed_state = hashed_state.into_sorted();
-        info!("SCALERIZE ROOT: {:?}", response);
         let root = B256::from_slice(&response.unwrap());
         Ok(root)
     }
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
-        // info!("LATEST STATE ROOT FROM NODES");
-
         let hashed_state_sorted: reth_trie::HashedPostStateSorted = input.state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
         client.write_hashed_state(&hashed_state_sorted)?;
-        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
-        //     .map_err(|err| ProviderError::Database(err.into()))
+       
         let mut scalerize_state_client = ScalerizeStateClient::connect()
         .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
@@ -131,7 +120,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
             return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
         }
 
-        // info!("SCALERIZE ROOT: {:?}", response);
         let root = B256::from_slice(&response.unwrap());
         Ok(root)
     }
@@ -140,13 +128,10 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
         &self,
         hashed_state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        // info!("LATEST STATE ROOT WITH UPDATES");
-
         let hashed_state_sorted = hashed_state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
         client.write_hashed_state(&hashed_state_sorted)?;
-        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
-        //     .map_err(|err| ProviderError::Database(err.into()))
+
         let mut scalerize_state_client = ScalerizeStateClient::connect()
         .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
@@ -159,10 +144,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
             return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
         }
 
-        // let deserialized_response: (B256, TrieUpdates) = bincode::deserialize(&response.unwrap())
-        //     .map_err(|_| ProviderError::SerializationError("Failed to deserialize response".to_string()))?;
-        // Ok(deserialized_response)
-        // info!("SCALERIZE ROOT: {:?}", response);
         let root = B256::from_slice(&response.unwrap());
         Ok((root, TrieUpdates::default()))    
     }
@@ -171,11 +152,10 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
         &self,
         input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        // info!("LATEST STATE ROOT FROM NODES WITH UPDATES");
         let hashed_state_sorted = input.state.clone().into_sorted();
         let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
-        client.write_hashed_state(&hashed_state_sorted)?;        // StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
-        //     .map_err(|err| ProviderError::Database(err.into()))
+        client.write_hashed_state(&hashed_state_sorted)?;        
+
         let mut scalerize_state_client = ScalerizeStateClient::connect()
         .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
@@ -188,7 +168,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
             return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
         }
 
-        info!("SCALERIZE ROOT: {:?}", response);
         let root = B256::from_slice(&response.unwrap());
         Ok((root, TrieUpdates::default()))    
     }
@@ -202,7 +181,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> StorageRootProvider
         address: Address,
         hashed_storage: HashedStorage,
     ) -> ProviderResult<B256> {
-        // info!("LATEST STORAGE ROOT");
         StorageRoot::overlay_root(self.tx(), address, hashed_storage)
             .map_err(|err| ProviderError::Database(err.into()))
     }
@@ -261,8 +239,6 @@ impl<Provider: DBProvider + StateCommitmentProvider> HashedPostStateProvider
     for LatestStateProviderRef<'_, Provider>
 {
     fn hashed_post_state(&self, bundle_state: &revm::db::BundleState) -> HashedPostState {
-        // info!("BUNDLE STATE IN LATEST: {:?}", bundle_state);
-        // revm::db::BundleState::to_plain_state(bundle_state, revm::db::OriginalValuesKnown::Yes);
         HashedPostState::from_bundle_state::<
             <Provider::StateCommitment as StateCommitment>::KeyHasher,
         >(bundle_state.state())
@@ -306,7 +282,6 @@ pub struct LatestStateProvider<Provider>(Provider);
 impl<Provider: DBProvider + StateCommitmentProvider> LatestStateProvider<Provider> {
     /// Create new state provider
     pub fn new(db: Provider) -> Self {
-        // info!("ONLY LATESTSTATEPROVIDER");
         Self(db)
     }
 

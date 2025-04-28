@@ -840,7 +840,6 @@ where
 
         // let mut buf = Vec::new();
         for key in keys.clone() {
-            println!("STORAGE KEY INPUT: {:?}", key);
             if let JsonStorageKey::Hash(hash) = key {
                 let serialized = bincode::serialize(&keccak256(hash)).map_err(|e| {
                     jsonrpsee_types::error::ErrorObjectOwned::owned(
@@ -852,8 +851,6 @@ where
                 buf.extend_from_slice(&serialized);
             }
         }
-
-        info!("ETH GET PROOF REQUEST BYTES: {:?}", buf);
 
         let block_spec_bytes = match block_number {
             Some(BlockId::Number(n)) => {
@@ -897,8 +894,6 @@ where
             ));
         }
 
-        println!("PROOF DATA: {:?}", account_proof_response_bytes);
-
         let mut response: EIP1186AccountProofResponse = serde_json::from_slice(account_proof_response_bytes.as_ref().unwrap()).map_err(|e| {
             ErrorObjectOwned::owned(
                 jsonrpsee_types::error::INTERNAL_ERROR_CODE,
@@ -906,8 +901,6 @@ where
                 None::<String>,
             )
         })?;
-
-        println!("ACCOUNT PROOF RESPONSE: {:?}", response);
 
         let account = self.get_account(address, block_number.unwrap_or_else(|| {
             // Default to latest if no block number provided.

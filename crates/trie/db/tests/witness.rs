@@ -29,7 +29,6 @@ fn includes_empty_node_preimage() {
             .compute(HashedPostState {
                 accounts: HashMap::from_iter([(hashed_address, Some(Account::default()))]),
                 storages: HashMap::default(),
-                calc_mode: None,
             })
             .unwrap(),
         HashMap::from_iter([(EMPTY_ROOT_HASH, Bytes::from([EMPTY_STRING_CODE]))])
@@ -50,7 +49,6 @@ fn includes_empty_node_preimage() {
                 hashed_address,
                 HashedStorage::from_iter(false, [(hashed_slot, U256::from(1))]),
             )]),
-            calc_mode: None,
         })
         .unwrap();
     assert!(witness.contains_key(&state_root));
@@ -90,7 +88,6 @@ fn includes_nodes_for_destroyed_storage_nodes() {
                     hashed_address,
                     HashedStorage::from_iter(true, []),
                 )]), // destroyed
-                calc_mode: None,
             })
             .unwrap();
     assert!(witness.contains_key(&state_root));
@@ -141,7 +138,6 @@ fn correctly_decodes_branch_node_values() {
                     [hashed_slot1, hashed_slot2].map(|hashed_slot| (hashed_slot, U256::from(2))),
                 ),
             )]),
-            calc_mode: None,
         })
         .unwrap();
     assert!(witness.contains_key(&state_root));

@@ -729,11 +729,9 @@ impl ScalerizeDBClient {
     }
 
     pub fn write_hashed_state(&mut self, hashed_state: &HashedPostStateSorted) -> ProviderResult<()>{
-        // info!("START LATEST WRITE HASHED STATE: {:?}", hashed_state);
         let uuid = Uuid::new_v4();
         let mut id_hashed_accounts = [0u8; 8];
         id_hashed_accounts.copy_from_slice(&uuid.as_bytes()[..8]);
-        // let mut client = self.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
 
         // Write hashed account updates.
         for (hashed_address, account) in hashed_state.accounts().accounts_sorted() {
