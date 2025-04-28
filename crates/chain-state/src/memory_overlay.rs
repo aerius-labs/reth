@@ -109,22 +109,24 @@ impl<N: NodePrimitives> AccountReader for MemoryOverlayStateProviderRef<'_, N> {
 
 impl<N: NodePrimitives> StateRootProvider for MemoryOverlayStateProviderRef<'_, N> {
     fn state_root(&self, state: HashedPostState) -> ProviderResult<B256> {
-        info!("IN MEMORY STATE ROOT");
-        info!(
-            "MemoryOverlayStateProvider: fallback historical provider type: {}",
-            std::any::type_name_of_val(&*self.historical)
-        );
+        // info!("IN MEMORY STATE ROOT");
+        // info!("HASHED POST STATE IN IN MEMORY: {:?}", state);
+        // info!(
+        //     "MemoryOverlayStateProvider: fallback historical provider type: {}",
+        //     std::any::type_name_of_val(&*self.historical)
+        // );
         self.state_root_from_nodes(TrieInput::from_state(state))
     }
 
     fn state_root_from_nodes(&self, mut input: TrieInput) -> ProviderResult<B256> {
-        debug!("IN MEMORY STATE ROOT FROM NODES");
-        info!(
-            "MemoryOverlayStateProvider: fallback historical provider type: {}",
-            std::any::type_name_of_val(&*self.historical)
-        );
+        // debug!("IN MEMORY STATE ROOT FROM NODES");
+        // info!(
+        //     "MemoryOverlayStateProvider: fallback historical provider type: {}",
+        //     std::any::type_name_of_val(&*self.historical)
+        // );
         let MemoryOverlayTrieState { nodes, state } = self.trie_state().clone();
-        input.prepend_cached(nodes, state);
+        // input.prepend(state);
+        // info!("HASHED POST STATE AFTER PREPEND: {:?}", input.state);
         self.historical.state_root_from_nodes(input)
     }
 
@@ -132,7 +134,7 @@ impl<N: NodePrimitives> StateRootProvider for MemoryOverlayStateProviderRef<'_, 
         &self,
         state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        info!("IN MEMORY STATE ROOT WITH UPDATES");
+        // info!("IN MEMORY STATE ROOT WITH UPDATES");
         self.state_root_from_nodes_with_updates(TrieInput::from_state(state))
     }
 
@@ -140,9 +142,9 @@ impl<N: NodePrimitives> StateRootProvider for MemoryOverlayStateProviderRef<'_, 
         &self,
         mut input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        info!("IN MEMORY STATE ROOT FROM NODES WITH UPDATES");
+        // info!("IN MEMORY STATE ROOT FROM NODES WITH UPDATES");
         let MemoryOverlayTrieState { nodes, state } = self.trie_state().clone();
-        input.prepend_cached(nodes, state);
+        // input.prepend(state);
         self.historical.state_root_from_nodes_with_updates(input)
     }
 }

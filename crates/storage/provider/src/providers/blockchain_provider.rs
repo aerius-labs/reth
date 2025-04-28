@@ -49,7 +49,7 @@ use std::{
     sync::Arc,
     time::Instant,
 };
-use tracing::trace;
+use tracing::{trace, info};
 
 use crate::providers::ProviderNodeTypes;
 

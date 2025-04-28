@@ -825,27 +825,27 @@ impl<T: Table> DbCursorRW<T> for Cursor<RW, T> {
     fn upsert(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
         let table_code = match T::NAME {
             "HashedAccounts" => {
-                info!("RETH UPSERT");
+                // info!("RETH UPSERT");
                 Some(TABLE_CODE_HASHED_ACCOUNTS)}
             "HashedStorages" => {
-                info!("RETH UPSERT");
+                // info!("RETH UPSERT");
                 Some(TABLE_CODE_HASHED_STORAGES)
             }
             "PlainAccountState" => {
-                println!("UPSERT PlainAccountStateKEY: {:?}", key);
-                println!("UPSERT PlainAccountStateVALUE: {:?}", value);
+                // println!("UPSERT PlainAccountStateKEY: {:?}", key);
+                // println!("UPSERT PlainAccountStateVALUE: {:?}", value);
                 None
             },
             "PlainStorageState" => {
-                println!("UPSERT PlainStorageStateKEY: {:?}", key);
-                println!("UPSERT PlainStorageStateVALUE: {:?}", value);
+                // println!("UPSERT PlainStorageStateKEY: {:?}", key);
+                // println!("UPSERT PlainStorageStateVALUE: {:?}", value);
                 None
             },
             _ => None,
         };
 
         if let Some(code) = table_code {
-            info!("upsert for table: {:?}", table_code);
+            // info!("upsert for table: {:?}", table_code);
             let mut client =
                 self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
             let key = bincode::serialize(&key)

@@ -899,9 +899,17 @@ where
     /// This also updates the tracked safe and finalized blocks, and should be called before
     /// returning a VALID forkchoice update response
     fn update_canon_chain(&self, head: SealedHeader, update: &ForkchoiceState) -> RethResult<()> {
-        self.update_head(head)?;
+        self.update_head(head.clone())?;
         self.update_finalized_block(update.finalized_block_hash)?;
         self.update_safe_block(update.safe_block_hash)?;
+        info!(
+            target: "consensus::engine",
+            head_hash = ?head.hash(),
+            head_number = head.number,
+            finalized_block_hash = ?update.finalized_block_hash,
+            safe_block_hash = ?update.safe_block_hash,
+            "Canonical chain updated"
+        );
         Ok(())
     }
 
@@ -923,13 +931,21 @@ where
         };
 
         // we update the tracked header first
-        self.blockchain.set_canonical_head(head);
+        self.blockchain.set_canonical_head(head.clone());
 
         head_block.total_difficulty =
             self.blockchain.header_td_by_number(head_block.number)?.ok_or_else(|| {
                 RethError::Provider(ProviderError::TotalDifficultyNotFound(head_block.number))
             })?;
         self.sync_state_updater.update_status(head_block);
+
+        info!(
+            target: "consensus::engine",
+            hash = ?head.hash(),
+            number = head.number,
+            timestamp = head.timestamp,
+            "Canonical header updated"
+        );
 
         Ok(())
     }
@@ -1359,6 +1375,14 @@ where
                 let new_head = outcome.into_header();
                 debug!(target: "consensus::engine", hash=?new_head.hash(), number=new_head.number, "Canonicalized new head");
 
+                info!(
+                    target: "consensus::engine",
+                    hash = ?new_head.hash(),
+                    number = new_head.number,
+                    elapsed = ?elapsed,
+                    "Sync target successfully made canonical"
+                );
+                
                 // we can update the FCU blocks
                 if let Err(err) = self.update_canon_chain(new_head, &target) {
                     debug!(target: "consensus::engine", ?err, ?target, "Failed to update the canonical chain tracker");

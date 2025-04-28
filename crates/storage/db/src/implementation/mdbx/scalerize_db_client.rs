@@ -476,7 +476,7 @@ impl ScalerizeDBClient {
         key: &[u8],
         value: &[u8],
     ) -> Result<(), ClientError> {
-        info!("SCALERIZE UPSERT");
+        // info!("SCALERIZE UPSERT");
         let mut request = vec![OP_UPSERT, table_code];
         request.extend_from_slice(&cursor_id);
         request.extend_from_slice(key);
@@ -729,7 +729,7 @@ impl ScalerizeDBClient {
     }
 
     pub fn write_hashed_state(&mut self, hashed_state: &HashedPostStateSorted) -> ProviderResult<()>{
-        info!("START LATEST WRITE HASHED STATE: {:?}", hashed_state);
+        // info!("START LATEST WRITE HASHED STATE: {:?}", hashed_state);
         let uuid = Uuid::new_v4();
         let mut id_hashed_accounts = [0u8; 8];
         id_hashed_accounts.copy_from_slice(&uuid.as_bytes()[..8]);
@@ -752,6 +752,7 @@ impl ScalerizeDBClient {
                 	.map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
             }
         }
+
 
         let uuid = Uuid::new_v4();
         let mut id_hashed_storages = [0u8; 8];
@@ -800,7 +801,7 @@ impl ScalerizeDBClient {
 
         self.write().map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
 
-        info!("COMPLETE");
+        // info!("COMPLETE");
         Ok(())
     }
 

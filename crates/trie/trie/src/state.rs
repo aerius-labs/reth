@@ -11,6 +11,7 @@ use reth_primitives::Account;
 use reth_trie_common::{KeyHasher};
 use revm::db::{states::CacheAccount, AccountStatus, BundleAccount};
 use std::borrow::Cow;
+use tracing::info;
 
 /// Representation of in-memory hashed state.
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
@@ -47,6 +48,9 @@ impl HashedPostState {
             accounts.insert(address, account);
             storages.insert(address, storage);
         }
+
+        // info!("ACCOUNTS: {:?}", accounts);
+        // info!("STORAGES: {:?}", storages);
         Self { accounts, storages }
     }
 

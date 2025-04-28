@@ -97,7 +97,7 @@ pub trait HeaderValidator<H = Header>: Debug + Send + Sync {
     /// Validate that the header information regarding parent are correct.
     /// This checks the block number, timestamp, basefee and gas limit increment.
     ///
-    /// This is called before properties that are not in the header itself (like total difficulty)
+    /// This is called operties that are not in the header itself (like total difficulty)
     /// have been computed.
     ///
     /// **This should not be called for the genesis block**.

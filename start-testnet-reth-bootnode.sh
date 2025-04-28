@@ -15,3 +15,5 @@ reth node \
     --authrpc.jwtsecret $JWT_PATH \
     --datadir $ETH_DATA_DIR \
     --rpc.eth-proof-window 1209600 \
+    --engine.persistence-threshold 0 \
+
