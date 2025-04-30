@@ -51,3 +51,4 @@ reth node \
     --trusted-peers $enode_url \
     --rpc.eth-proof-window 1209600 \
     --engine.persistence-threshold 0 \
+    -vvvvv \
