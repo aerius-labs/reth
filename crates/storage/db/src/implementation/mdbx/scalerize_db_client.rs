@@ -1,0 +1,872 @@
+use super::{TABLE_CODE_HASHED_ACCOUNTS, TABLE_CODE_HASHED_STORAGES};
+use reth_storage_errors::{db::DatabaseError, provider::{ProviderResult, ProviderError}};
+use reth_primitives::StorageEntry;
+use reth_trie::HashedPostStateSorted;
+use itertools::Itertools;
+use std::{
+    fmt,
+    io::{Read, Write},
+    os::unix::net::UnixStream,
+    result::Result::Ok,
+    sync::mpsc::{self, Receiver},
+    thread,
+    time::Duration,
+};
+use uuid::Uuid;
+use tracing::info;
+
+const OP_PUT: u8 = 1;
+const OP_GET: u8 = 2;
+const OP_DELETE: u8 = 3;
+const OP_WRITE: u8 = 4;
+
+const OP_FIRST: u8 = 5;
+const OP_SEEK_EXACT: u8 = 6;
+const OP_SEEK: u8 = 7;
+const OP_NEXT: u8 = 8;
+const OP_PREV: u8 = 9;
+const OP_LAST: u8 = 10;
+const OP_CURRENT: u8 = 11;
+
+const OP_UPSERT: u8 = 12;
+const OP_INSERT: u8 = 13;
+const OP_APPEND: u8 = 14;
+const OP_DELETE_CURRENT: u8 = 15;
+
+const OP_NEXT_DUP: u8 = 16;
+const OP_NEXT_NO_DUP: u8 = 17;
+const OP_SEEK_BY_KEY_SUBKEY: u8 = 19;
+
+const OP_DELETE_CURRENT_DUPLICATE: u8 = 20;
+const OP_APPEND_DUP: u8 = 21;
+
+const STATUS_SUCCESS: u8 = 1;
+const STATUS_ERROR: u8 = 0;
+
+const SOCKET_PATH: &str = "/tmp/ipc/scalerize.sock";
+/// Represents errors that can occur while interacting with the Scalerize client.
+///
+/// This enum is used to categorize different types of errors that may arise during
+/// operations such as I/O errors, operation failures, and invalid responses from the server.
+#[derive(Debug)]
+pub enum ClientError {
+    /// An I/O error occurred.
+    Io(std::io::Error),
+
+    /// The requested operation failed with a specific message.
+    OperationFailed(String),
+
+    /// The request made is invalid.
+    InvalidRequest(String),
+
+    /// The response received from the server was invalid.
+    InvalidResponse(String),
+}
+
+impl From<ClientError> for DatabaseError {
+    fn from(error: ClientError) -> Self {
+        match error {
+            ClientError::Io(err) => DatabaseError::Other(format!("IO error: {}", err)),
+            ClientError::InvalidResponse(msg) => {
+                DatabaseError::Other(format!("Invalid response: {}", msg))
+            }
+            ClientError::InvalidRequest(msg) => {
+                DatabaseError::Other(format!("Invalid request: {}", msg))
+            }
+            ClientError::OperationFailed(msg) => {
+                DatabaseError::Other(format!("Operation failed: {}", msg))
+            }
+        }
+    }
+}
+
+impl fmt::Display for ClientError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ClientError::Io(err) => write!(f, "IO error: {}", err),
+            ClientError::InvalidResponse(msg) => write!(f, "Invalid response: {}", msg),
+            ClientError::InvalidRequest(msg) => write!(f, "Invalid request: {}", msg),
+            ClientError::OperationFailed(msg) => write!(f, "Operation failed: {}", msg),
+        }
+    }
+}
+
+impl From<std::io::Error> for ClientError {
+    fn from(error: std::io::Error) -> Self {
+        ClientError::Io(error)
+    }
+}
+
+impl Into<i32> for ClientError {
+    fn into(self) -> i32 {
+        match self {
+            ClientError::Io(_) => 1,
+            ClientError::InvalidResponse(_) => 2,
+            ClientError::InvalidRequest(_) => 3,
+            ClientError::OperationFailed(_) => 4,
+        }
+    }
+}
+
+// Client for making DB calls to scalerize
+pub struct ScalerizeDBClient {
+    stream: UnixStream,
+}
+
+impl ScalerizeDBClient {
+    pub fn connect() -> Result<Self, ClientError> {
+        let stream = UnixStream::connect(SOCKET_PATH)?;
+        Ok(Self { stream })
+    }
+
+    pub fn spawn_connect_thread() -> Receiver<Result<Self, ClientError>> {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || loop {
+            match ScalerizeDBClient::connect() {
+                Ok(client) => {
+                    let _ = tx.send(Ok(client));
+                    break;
+                }
+                Err(err) => {
+                    println!("Failed to connect: {}. Retrying...", err);
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        });
+        rx
+    }
+
+    fn log_response(response: &[u8]) {
+        if response.is_empty() {
+            println!("Empty response received");
+            return;
+        }
+
+        let status = response[0];
+        let data = &response[1..];
+
+        println!("Server Response Status: {}", status);
+        println!("Raw Response Data: {:?}", data);
+        if let Ok(text) = String::from_utf8(data.to_vec()) {
+            println!("Response as text: {}", text);
+        }
+    }
+
+    fn read_full_response(&mut self) -> Result<Vec<u8>, ClientError> {
+        let mut response = vec![0u8; 4096];
+        let n = self.stream.read(&mut response)?;
+        response.truncate(n);
+
+        if response.is_empty() {
+            return Err(ClientError::InvalidResponse("Empty response from server".to_string()));
+        }
+
+        // Self::log_response(&response);
+        Ok(response)
+    }
+
+    pub fn get(&mut self, table_code: u8, key: &[u8]) -> Result<Option<Vec<u8>>, ClientError> {
+        let mut request = vec![OP_GET];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(key);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = response[1..].to_vec();
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => Ok(Some(data)),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    // no need to send rlp encoded for dupsorted even when using this method
+    // just send the value at that subkey
+    pub fn put(&mut self, table_code: u8, key: &[u8], value: &[u8]) -> Result<(), ClientError> {
+        let mut request = vec![OP_PUT, table_code];
+
+        request.extend_from_slice(key);
+        request.extend_from_slice(value);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+
+        let status = response[0];
+        let data = response[1..].to_vec();
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn delete(
+        &mut self,
+        table_code: u8,
+        key: &[u8],
+        subkey: Option<&[u8]>,
+    ) -> Result<(), ClientError> {
+        let mut request = vec![OP_DELETE, table_code];
+        request.extend_from_slice(key);
+        if let Some(subkey) = subkey {
+            request.extend_from_slice(subkey);
+        }
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = response[1..].to_vec();
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn write(&mut self) -> Result<(), ClientError> {
+        let mut request = vec![OP_WRITE];
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = response[1..].to_vec();
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn first(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key_len: u8,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_FIRST];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => self.parse_key_value_response(data, key_len).map(Some),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn seek_exact(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_SEEK_EXACT];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+        request.extend_from_slice(key);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => {
+                self.parse_key_value_response(data, key.len().try_into().unwrap()).map(Some)
+            }
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn seek(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_SEEK];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+        request.extend_from_slice(key);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => {
+                self.parse_key_value_response(data, key.len().try_into().unwrap()).map(Some)
+            }
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn next(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key_len: u8,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_NEXT];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => self.parse_key_value_response(data, key_len).map(Some),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn prev(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key_len: u8,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_PREV];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => self.parse_key_value_response(data, key_len).map(Some),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn last(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key_len: u8,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_LAST];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => self.parse_key_value_response(data, key_len).map(Some),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn current(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key_len: u8,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_CURRENT];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+        if data.is_empty() {
+            return Ok(None)
+        }
+
+        match status {
+            STATUS_SUCCESS => self.parse_key_value_response(data, key_len).map(Some),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn upsert(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(), ClientError> {
+        // info!("SCALERIZE UPSERT");
+        let mut request = vec![OP_UPSERT, table_code];
+        request.extend_from_slice(&cursor_id);
+        request.extend_from_slice(key);
+        request.extend_from_slice(value);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+
+        let status = response[0];
+        let data = response[1..].to_vec();
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn insert(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(), ClientError> {
+        let mut request = vec![OP_INSERT, table_code];
+        request.extend_from_slice(&cursor_id);
+        request.extend_from_slice(key);
+        request.extend_from_slice(value);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+
+        let status = response[0];
+        let data = response[1..].to_vec();
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn append(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(), ClientError> {
+        let mut request = vec![OP_APPEND, table_code];
+        request.extend_from_slice(&cursor_id);
+        request.extend_from_slice(key);
+        request.extend_from_slice(value);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+
+        let status = response[0];
+        let data = response[1..].to_vec();
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn delete_current(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+    ) -> Result<(), ClientError> {
+        let mut request = vec![OP_DELETE_CURRENT];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn next_dup(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key_len: u8,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_NEXT_DUP];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+
+        if data.is_empty() {
+            return Ok(None);
+        }
+        match status {
+            STATUS_SUCCESS => self.parse_key_value_response(data, key_len).map(Some),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn next_no_dup(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key_len: u8,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ClientError> {
+        let mut request = vec![OP_NEXT_NO_DUP];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+
+        if data.is_empty() {
+            return Ok(None);
+        }
+
+        match status {
+            STATUS_SUCCESS => self.parse_key_value_response(data, key_len).map(Some),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn seek_by_key_subkey(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key: &[u8],
+        subkey: &[u8],
+    ) -> Result<Option<Vec<u8>>, ClientError> {
+        let mut request = vec![OP_SEEK_BY_KEY_SUBKEY];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+        request.extend_from_slice(key);
+        request.extend_from_slice(subkey);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data = &response[1..];
+
+        if data.is_empty() {
+            return Ok(None);
+        }
+
+        match status {
+            STATUS_SUCCESS => Ok(Some(data.to_vec())),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn delete_current_duplicates(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+    ) -> Result<(), ClientError> {
+        let mut request = vec![OP_DELETE_CURRENT_DUPLICATE];
+        request.extend_from_slice(&table_code.to_be_bytes());
+        request.extend_from_slice(&cursor_id);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+        let status = response[0];
+        let data: &[u8] = &response[1..];
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(data).into_owned()))
+            }
+            _ => Err(ClientError::InvalidResponse(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    pub fn append_dup(
+        &mut self,
+        table_code: u8,
+        cursor_id: Vec<u8>,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(), ClientError> {
+        let mut request = vec![OP_APPEND_DUP, table_code];
+        request.extend_from_slice(&cursor_id);
+        request.extend_from_slice(key);
+        request.extend_from_slice(value);
+
+        self.stream.write_all(&request)?;
+        self.stream.flush()?;
+
+        let response = self.read_full_response()?;
+
+        let status = response[0];
+        let data = response[1..].to_vec();
+
+        match status {
+            STATUS_SUCCESS => Ok(()),
+            STATUS_ERROR => {
+                Err(ClientError::OperationFailed(String::from_utf8_lossy(&data).into_owned()))
+            }
+            _ => Err(ClientError::OperationFailed(format!("Error: {:?}", data))),
+        }
+    }
+
+    pub fn write_hashed_state(&mut self, hashed_state: &HashedPostStateSorted) -> ProviderResult<()>{
+        let uuid = Uuid::new_v4();
+        let mut id_hashed_accounts = [0u8; 8];
+        id_hashed_accounts.copy_from_slice(&uuid.as_bytes()[..8]);
+
+        // Write hashed account updates.
+        for (hashed_address, account) in hashed_state.accounts().accounts_sorted() {
+            let key = bincode::serialize(&hashed_address)
+                .map_err(|_| ProviderError::SerializationError("Failed to serialize Key".to_string()))?;
+            if let Some(account) = account {
+                let value = bincode::serialize(&account)
+                .map_err(|_| ProviderError::SerializationError("Failed to serialize Value".to_string()))?;
+                self.upsert(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec(), key.as_slice(), &value)
+                .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+            } else if self
+                .seek_exact(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec(), key.as_slice())
+                .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?
+                .is_some() {
+					self.delete_current(TABLE_CODE_HASHED_ACCOUNTS, id_hashed_accounts.to_vec())
+                	.map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+            }
+        }
+
+
+        let uuid = Uuid::new_v4();
+        let mut id_hashed_storages = [0u8; 8];
+        id_hashed_storages.copy_from_slice(&uuid.as_bytes()[..8]);
+
+        // Write hashed storage changes.
+        let sorted_storages = hashed_state.account_storages().iter().sorted_by_key(|(key, _)| *key);
+        for (hashed_address, storage) in sorted_storages {
+            let key = bincode::serialize(&hashed_address)
+                .map_err(|_| ProviderError::SerializationError("Failed to serialize Key".to_string()))?;
+            if storage.is_wiped() && self.seek_exact(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec(), key.as_slice())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?
+            .is_some() {
+                self.delete_current_duplicates(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec())
+                .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+            }
+
+            for (hashed_slot, value) in storage.storage_slots_sorted() {
+                let entry = StorageEntry { key: hashed_slot, value };
+                let subkey = bincode::serialize(&entry.key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Subkey".to_string()))?;
+
+                if let Some(response) =
+                    self.seek_by_key_subkey(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec(), key.as_slice(), &subkey)
+                    .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?
+                {
+                    let db_entry: StorageEntry =
+                        bincode::deserialize(&response).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                        })?;
+                    if db_entry.key == entry.key {
+                        self.delete_current(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec())
+                        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+                    }
+                }
+
+                let value = bincode::serialize(&entry)
+                .map_err(|_| ProviderError::SerializationError("Failed to serialize Value".to_string()))?;
+
+                if !entry.value.is_zero() {
+                    self.upsert(TABLE_CODE_HASHED_STORAGES, id_hashed_storages.to_vec(),key.as_slice(), &value)
+                    .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+                }
+            }
+        }
+
+        self.write().map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        // info!("COMPLETE");
+        Ok(())
+    }
+
+    pub fn check_additional_messages(&mut self) {
+        println!("Checking for additional messages...");
+        // Set socket to non-blocking mode for checking additional messages
+        self.stream
+            .set_nonblocking(true)
+            .unwrap_or_else(|e| println!("Failed to set non-blocking mode: {}", e));
+
+        loop {
+            let mut buffer = vec![0u8; 4096];
+            match self.stream.read(&mut buffer) {
+                Ok(n) if n > 0 => {
+                    buffer.truncate(n);
+                    println!("Additional message received: {:?}", buffer);
+                }
+                Ok(_) => {
+                    println!("No more messages");
+                    break;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    println!("No more messages");
+                    break;
+                }
+                Err(e) => {
+                    println!("Error reading additional messages: {}", e);
+                    break;
+                }
+            }
+        }
+
+        // Set socket back to blocking mode
+        self.stream
+            .set_nonblocking(false)
+            .unwrap_or_else(|e| println!("Failed to set blocking mode: {}", e));
+    }
+
+    fn parse_key_value_response(
+        &self,
+        data: &[u8],
+        key_len_in_bytes: u8,
+    ) -> Result<(Vec<u8>, Vec<u8>), ClientError> {
+        if data.is_empty() {
+            return Ok((vec![], vec![]));
+        }
+
+        if data.len() < key_len_in_bytes.try_into().unwrap() {
+            return Err(ClientError::InvalidResponse(
+                "Response too short for key length".to_string(),
+            ));
+        }
+
+        if data.len() < key_len_in_bytes.try_into().unwrap() {
+            return Err(ClientError::InvalidResponse("Response too short for key".to_string()));
+        }
+
+        let key = data[0..key_len_in_bytes as usize].to_vec();
+        let value = data[key_len_in_bytes as usize..].to_vec();
+        Ok((key, value))
+    }
+}
+
+impl std::fmt::Debug for ScalerizeDBClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ScalerizeDBClient")
+            .field("stream", &format!("UnixStream connected to {}", SOCKET_PATH))
+            .finish()
+    }
+}

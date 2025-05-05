@@ -3,14 +3,12 @@ use crate::{
     Nibbles,
 };
 use alloy_primitives::{
-    keccak256,
-    map::{hash_map, B256HashMap, B256HashSet, HashMap, HashSet},
-    Address, B256, U256,
+    keccak256, map::{hash_map, B256HashMap, B256HashSet, HashMap, HashSet}, Address, B256, U256
 };
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use reth_primitives::Account;
-use reth_trie_common::KeyHasher;
+use reth_trie_common::{KeyHasher};
 use revm::db::{states::CacheAccount, AccountStatus, BundleAccount};
 use std::borrow::Cow;
 
@@ -49,6 +47,9 @@ impl HashedPostState {
             accounts.insert(address, account);
             storages.insert(address, storage);
         }
+
+        // info!("ACCOUNTS: {:?}", accounts);
+        // info!("STORAGES: {:?}", storages);
         Self { accounts, storages }
     }
 

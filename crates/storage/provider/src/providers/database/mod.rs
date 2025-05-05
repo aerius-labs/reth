@@ -35,7 +35,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::watch;
-use tracing::trace;
+use tracing::{trace, info};
 
 mod provider;
 pub use provider::{DatabaseProvider, DatabaseProviderRO, DatabaseProviderRW};
@@ -606,6 +606,7 @@ impl<N: ProviderNodeTypes> PruneCheckpointReader for ProviderFactory<N> {
 
 impl<N: ProviderNodeTypes> HashedPostStateProvider for ProviderFactory<N> {
     fn hashed_post_state(&self, bundle_state: &BundleState) -> HashedPostState {
+        info!("BUNDLE STATE IN HashedPostStateProvider");
         HashedPostState::from_bundle_state::<<N::StateCommitment as StateCommitment>::KeyHasher>(
             bundle_state.state(),
         )

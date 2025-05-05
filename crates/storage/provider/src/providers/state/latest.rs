@@ -1,43 +1,60 @@
 use crate::{
-    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader,
-    HashedPostStateProvider, StateProvider, StateRootProvider,
+    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, providers::ScalerizeStateClient,
+    HashedPostStateProvider, StateProvider, StateRootProvider, 
 };
 use alloy_primitives::{
-    map::B256HashMap, Address, BlockNumber, Bytes, StorageKey, StorageValue, B256,
+    map::B256HashMap, Address, BlockNumber, Bytes, StorageKey, StorageValue, B256
 };
-use reth_db::tables;
-use reth_db_api::{cursor::DbDupCursorRO, transaction::DbTx};
+use reth_db::{tables, mdbx::scalerize_db_client::ScalerizeDBClient};
+use std::sync::{Arc, RwLock};
 use reth_primitives::{Account, Bytecode};
 use reth_storage_api::{
     DBProvider, StateCommitmentProvider, StateProofProvider, StorageRootProvider,
 };
-use reth_storage_errors::provider::{ProviderError, ProviderResult};
+use reth_storage_errors::{provider::{ProviderResult, ProviderError}, db::DatabaseError};
+use reth_db_api::{cursor::DbDupCursorRO, transaction::DbTx};
 use reth_trie::{
     proof::{Proof, StorageProof},
     updates::TrieUpdates,
     witness::TrieWitness,
-    AccountProof, HashedPostState, HashedStorage, MultiProof, MultiProofTargets, StateRoot,
+    AccountProof, HashedPostState, HashedStorage, MultiProof, MultiProofTargets,
     StorageMultiProof, StorageRoot, TrieInput,
 };
 use reth_trie_db::{
-    DatabaseProof, DatabaseStateRoot, DatabaseStorageProof, DatabaseStorageRoot,
+    DatabaseProof, DatabaseStorageProof, DatabaseStorageRoot,
     DatabaseTrieWitness, StateCommitment,
 };
+use std::{thread, time::Duration};
 
 /// State provider over latest state that takes tx reference.
 ///
 /// Wraps a [`DBProvider`] to get access to database.
 #[derive(Debug)]
-pub struct LatestStateProviderRef<'b, Provider>(&'b Provider);
+pub struct LatestStateProviderRef<'b, Provider> {
+    db: &'b Provider,
+    scalerize_db_client: Arc<RwLock<ScalerizeDBClient>>,
+}
 
 impl<'b, Provider: DBProvider> LatestStateProviderRef<'b, Provider> {
-    /// Create new state provider
-    pub const fn new(provider: &'b Provider) -> Self {
-        Self(provider)
+    pub fn new(provider: &'b Provider) -> Self{
+        let client = loop {
+            match ScalerizeDBClient::connect() {
+                Ok(client) => break client,
+                Err(err) => {
+                    println!("Failed to connect: {}. Retrying...", err);
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        };
+
+        Self {
+            db: provider,
+            scalerize_db_client: Arc::new(RwLock::new(client)),
+        }
     }
 
     fn tx(&self) -> &Provider::Tx {
-        self.0.tx_ref()
+        self.db.tx_ref()
     }
 }
 
@@ -51,7 +68,7 @@ impl<Provider: DBProvider> AccountReader for LatestStateProviderRef<'_, Provider
 impl<Provider: BlockHashReader> BlockHashReader for LatestStateProviderRef<'_, Provider> {
     /// Get block hash by number.
     fn block_hash(&self, number: u64) -> ProviderResult<Option<B256>> {
-        self.0.block_hash(number)
+        self.db.block_hash(number)
     }
 
     fn canonical_hashes_range(
@@ -59,7 +76,7 @@ impl<Provider: BlockHashReader> BlockHashReader for LatestStateProviderRef<'_, P
         start: BlockNumber,
         end: BlockNumber,
     ) -> ProviderResult<Vec<B256>> {
-        self.0.canonical_hashes_range(start, end)
+        self.db.canonical_hashes_range(start, end)
     }
 }
 
@@ -67,29 +84,92 @@ impl<Provider: DBProvider + StateCommitmentProvider> StateRootProvider
     for LatestStateProviderRef<'_, Provider>
 {
     fn state_root(&self, hashed_state: HashedPostState) -> ProviderResult<B256> {
-        StateRoot::overlay_root(self.tx(), hashed_state)
-            .map_err(|err| ProviderError::Database(err.into()))
+        let hashed_state_sorted = hashed_state.clone().into_sorted();
+        let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
+        client.write_hashed_state(&hashed_state_sorted)?;
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
+        let root = B256::from_slice(&response.unwrap());
+        Ok(root)
     }
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
-        StateRoot::overlay_root_from_nodes(self.tx(), input)
-            .map_err(|err| ProviderError::Database(err.into()))
+        let hashed_state_sorted: reth_trie::HashedPostStateSorted = input.state.clone().into_sorted();
+        let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
+        client.write_hashed_state(&hashed_state_sorted)?;
+       
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
+        let root = B256::from_slice(&response.unwrap());
+        Ok(root)
     }
 
     fn state_root_with_updates(
         &self,
         hashed_state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        StateRoot::overlay_root_with_updates(self.tx(), hashed_state)
-            .map_err(|err| ProviderError::Database(err.into()))
+        let hashed_state_sorted = hashed_state.clone().into_sorted();
+        let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
+        client.write_hashed_state(&hashed_state_sorted)?;
+
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
+        let root = B256::from_slice(&response.unwrap());
+        Ok((root, TrieUpdates::default()))    
     }
 
     fn state_root_from_nodes_with_updates(
         &self,
         input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        StateRoot::overlay_root_from_nodes_with_updates(self.tx(), input)
-            .map_err(|err| ProviderError::Database(err.into()))
+        let hashed_state_sorted = input.state.clone().into_sorted();
+        let mut client = self.scalerize_db_client.write().map_err(|e| ProviderError::UnexpectedError(e.to_string()))?;
+        client.write_hashed_state(&hashed_state_sorted)?;        
+
+        let mut scalerize_state_client = ScalerizeStateClient::connect()
+        .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        let height:i64 = -1;
+
+        let response = scalerize_state_client.state_root(&height.to_be_bytes())
+            .map_err(|e| ProviderError::Database(DatabaseError::from(e)))?;
+
+        if response.is_none() {
+            return Err(ProviderError::UnexpectedError("empty response from scalerize_state_client for state root".to_string()))
+        }
+
+        let root = B256::from_slice(&response.unwrap());
+        Ok((root, TrieUpdates::default()))    
     }
 }
 
@@ -201,13 +281,13 @@ pub struct LatestStateProvider<Provider>(Provider);
 
 impl<Provider: DBProvider + StateCommitmentProvider> LatestStateProvider<Provider> {
     /// Create new state provider
-    pub const fn new(db: Provider) -> Self {
+    pub fn new(db: Provider) -> Self {
         Self(db)
     }
 
     /// Returns a new provider that takes the `TX` as reference
     #[inline(always)]
-    const fn as_ref(&self) -> LatestStateProviderRef<'_, Provider> {
+    fn as_ref(&self) -> LatestStateProviderRef<'_, Provider> {
         LatestStateProviderRef::new(&self.0)
     }
 }

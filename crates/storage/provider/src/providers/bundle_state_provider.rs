@@ -9,6 +9,7 @@ use reth_trie::{
     updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof,
     MultiProofTargets, StorageMultiProof, TrieInput,
 };
+use tracing::info;
 
 /// A state provider that resolves to data from either a wrapped [`crate::ExecutionOutcome`]
 /// or an underlying state provider.
@@ -188,6 +189,7 @@ impl<SP: StateProvider, EDP: ExecutionDataProvider> HashedPostStateProvider
     for BundleStateProvider<SP, EDP>
 {
     fn hashed_post_state(&self, bundle_state: &revm::db::BundleState) -> HashedPostState {
+        info!("BUNDLE STATE IN ExecutionDataProvider");
         self.state_provider.hashed_post_state(bundle_state)
     }
 }

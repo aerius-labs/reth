@@ -24,6 +24,7 @@ macro_rules! engine_span {
 pub struct EngineEthApi<Eth, EthFilter> {
     eth: Eth,
     eth_filter: EthFilter,
+    // scalerize_state_client: Arc<RwLock<ScalerizeStateClient>>
 }
 
 impl<Eth, EthFilter> EngineEthApi<Eth, EthFilter> {
@@ -31,6 +32,27 @@ impl<Eth, EthFilter> EngineEthApi<Eth, EthFilter> {
     pub const fn new(eth: Eth, eth_filter: EthFilter) -> Self {
         Self { eth, eth_filter }
     }
+
+    // pub fn new(eth: Eth, eth_filter: EthFilter) -> Result<Self> {
+    //     let rx = ScalerizeStateClient::spawn_connect_thread();
+    //     // Try to receive the connection result from the spawned thread.
+    //     let client_result = rx.recv().map_err(|_err| {
+    //         jsonrpsee_types::error::ErrorObjectOwned::owned(
+    //             jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+    //             "Connection thread terminated abnormally".to_string(),
+    //             None::<String>,
+    //         )
+    //     })?;
+    //     // Use the client_result or return its error.
+    //     let scalerize_state_client = Arc::new(std::sync::RwLock::new(client_result.map_err( |err| {
+    //         jsonrpsee_types::error::ErrorObjectOwned::owned(
+    //             jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+    //             err.to_string(),
+    //             None::<String>,
+    //         )
+    //     })?));
+    //     Ok(Self { eth, eth_filter, scalerize_state_client })
+    // }
 }
 
 #[async_trait::async_trait]
@@ -120,6 +142,23 @@ where
         keys: Vec<JsonStorageKey>,
         block_number: Option<BlockId>,
     ) -> Result<EIP1186AccountProofResponse> {
+        // let scalerize_state_client = ScalerizeStateClient::connect().map_err(|err| {
+        //     jsonrpsee_types::error::ErrorObjectOwned::owned(
+        //         jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+        //         err.to_string(),
+        //         None::<String>,
+        //     )
+        // })?;
+        // let hashed_account_address = keccak256(address);
+        // let serialized_hashed_account_address = bincode::serialize(&hashed_account_address);
+
+        // let storage_keys:Vec<B256> = keys.iter().filter_map(|key| {
+        //     if let JsonStorageKey::Hash(h) = key {
+        //         Some(*h)
+        //     } else {
+        //         None
+        //     }
+        // }).collect();
         self.eth.get_proof(address, keys, block_number).instrument(engine_span!()).await
     }
 }

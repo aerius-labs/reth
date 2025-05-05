@@ -9,6 +9,11 @@ MDBX_PATH = "crates/storage/libmdbx-rs/mdbx-sys/libmdbx"
 DB_TOOLS_DIR = "db-tools"
 FULL_DB_TOOLS_DIR := $(shell pwd)/$(DB_TOOLS_DIR)/
 
+ETH_DATA_DIR = .scalerized/eth
+TESTAPP_FILES_DIR = testing/files
+JWT_PATH = ${TESTAPP_FILES_DIR}/jwt.hex
+ETH_GENESIS_PATH = ${TESTAPP_FILES_DIR}/eth-genesis.json
+
 CARGO_TARGET_DIR ?= target
 
 # List of features to use when building. Can be overridden via the environment.
@@ -506,3 +511,21 @@ check-features:
 		--package reth-primitives-traits \
 		--package reth-primitives \
 		--feature-powerset
+
+init:
+	./init.sh
+
+start-reth-host: ## start a local ephemeral `reth` node on host machine
+	rm -rf ${ETH_DATA_DIR}
+	$(CARGO_TARGET_DIR)/debug/reth init --datadir ${ETH_DATA_DIR} --chain ${ETH_GENESIS_PATH}
+	$(CARGO_TARGET_DIR)/debug/reth node \
+	--chain ${ETH_GENESIS_PATH} \
+	--http \
+	--http.addr "0.0.0.0" \
+	--http.api admin,debug,eth,net,trace,txpool,web3,rpc,reth,ots \
+	--authrpc.addr "0.0.0.0" \
+	--authrpc.jwtsecret $(JWT_PATH) \
+	--datadir ${ETH_DATA_DIR} \
+	--engine.persistence-threshold 0 \
+	--engine.memory-block-buffer-target 0 \
+	--rpc.eth-proof-window 1209600

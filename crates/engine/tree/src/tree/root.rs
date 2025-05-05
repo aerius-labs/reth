@@ -30,7 +30,7 @@ use std::{
     thread::{self},
     time::{Duration, Instant},
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, info};
 
 /// The level below which the sparse trie hashes are calculated in [`update_sparse_trie`].
 const SPARSE_TRIE_INCREMENTAL_LEVEL: usize = 2;
@@ -219,6 +219,7 @@ impl<BPF: BlindedProviderFactory> Drop for StateHookSender<BPF> {
 }
 
 fn evm_state_to_hashed_post_state(update: EvmState) -> HashedPostState {
+    info!("evm_state_to_hashed_post_state");
     let mut hashed_state = HashedPostState::default();
 
     for (address, account) in update {

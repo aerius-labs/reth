@@ -1,6 +1,9 @@
 //! Transaction wrapper for libmdbx-sys.
 
-use super::cursor::Cursor;
+use super::{
+    cursor::Cursor, scalerize_db_client::ScalerizeDBClient, TABLE_CODE_HASHED_ACCOUNTS,
+    TABLE_CODE_HASHED_STORAGES,
+};
 use crate::{
     metrics::{DatabaseEnvMetrics, Operation, TransactionMode, TransactionOutcome},
     tables::utils::decode_one,
@@ -11,14 +14,15 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
 };
 use reth_libmdbx::{ffi::MDBX_dbi, CommitLatency, Transaction, TransactionKind, WriteFlags, RW};
+use reth_primitives::{Account, StorageEntry};
 use reth_storage_errors::db::{DatabaseWriteError, DatabaseWriteOperation};
-use reth_tracing::tracing::{debug, trace, warn};
+use reth_tracing::tracing::{debug, info, trace, warn};
 use std::{
     backtrace::Backtrace,
     marker::PhantomData,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, RwLock,
     },
     time::{Duration, Instant},
 };
@@ -37,13 +41,19 @@ pub struct Tx<K: TransactionKind> {
     ///
     /// If [Some], then metrics are reported.
     metrics_handler: Option<MetricsHandler<K>>,
+
+    // Client for making DB calls to scalerize
+    scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
 }
 
 impl<K: TransactionKind> Tx<K> {
     /// Creates new `Tx` object with a `RO` or `RW` transaction.
     #[inline]
-    pub const fn new(inner: Transaction<K>) -> Self {
-        Self::new_inner(inner, None)
+    pub const fn new(
+        inner: Transaction<K>,
+        scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
+    ) -> Self {
+        Self::new_inner(inner, None, scalerize_client)
     }
 
     /// Creates new `Tx` object with a `RO` or `RW` transaction and optionally enables metrics.
@@ -52,6 +62,7 @@ impl<K: TransactionKind> Tx<K> {
     pub(crate) fn new_with_metrics(
         inner: Transaction<K>,
         env_metrics: Option<Arc<DatabaseEnvMetrics>>,
+        scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
     ) -> reth_libmdbx::Result<Self> {
         let metrics_handler = env_metrics
             .map(|env_metrics| {
@@ -61,12 +72,16 @@ impl<K: TransactionKind> Tx<K> {
                 Ok(handler)
             })
             .transpose()?;
-        Ok(Self::new_inner(inner, metrics_handler))
+        Ok(Self::new_inner(inner, metrics_handler, scalerize_client))
     }
 
     #[inline]
-    const fn new_inner(inner: Transaction<K>, metrics_handler: Option<MetricsHandler<K>>) -> Self {
-        Self { inner, metrics_handler }
+    const fn new_inner(
+        inner: Transaction<K>,
+        metrics_handler: Option<MetricsHandler<K>>,
+        scalerize_client: Arc<RwLock<ScalerizeDBClient>>,
+    ) -> Self {
+        Self { inner, metrics_handler, scalerize_client }
     }
 
     /// Gets this transaction ID.
@@ -92,6 +107,7 @@ impl<K: TransactionKind> Tx<K> {
         Ok(Cursor::new_with_metrics(
             inner,
             self.metrics_handler.as_ref().map(|h| h.env_metrics.clone()),
+            self.scalerize_client.clone(),
         ))
     }
 
@@ -282,7 +298,53 @@ impl<K: TransactionKind> DbTx for Tx<K> {
     type Cursor<T: Table> = Cursor<K, T>;
     type DupCursor<T: DupSort> = Cursor<K, T>;
 
-    fn get<T: Table>(&self, key: T::Key) -> Result<Option<<T as Table>::Value>, DatabaseError> {
+    fn get<T: Table>(&self, key: T::Key) -> Result<Option<<T as Table>::Value>, DatabaseError>
+    where
+        T::Key: Encode,
+    {
+        let table_code = match T::NAME {
+            "HashedAccounts" => Some(TABLE_CODE_HASHED_ACCOUNTS),
+            "HashedStorages" => Some(TABLE_CODE_HASHED_STORAGES),
+            _ => None,
+        };
+
+        if let Some(code) = table_code {
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key_bytes = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize key".to_string()))?;
+            let response = client.get(code, key_bytes.as_slice()).map_err(DatabaseError::from)?;
+
+            if response.is_none() {
+                return Ok(None)
+            }
+
+            match code {
+                TABLE_CODE_HASHED_ACCOUNTS => {
+                    let account: Account = bincode::deserialize(response.as_ref().unwrap())
+                        .map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize Account".to_string())
+                        })?;
+                    unsafe {
+                        let ptr = &account as *const Account as *const <T as Table>::Value;
+                        return Ok(Some(ptr.read()))
+                    }
+                }
+                TABLE_CODE_HASHED_STORAGES => {
+                    let storage_entry: StorageEntry =
+                        bincode::deserialize(response.as_ref().unwrap()).map_err(|_| {
+                            DatabaseError::Other("Failed to deserialize StorageEntry".to_string())
+                        })?;
+                    unsafe {
+                        let ptr =
+                            &storage_entry as *const StorageEntry as *const <T as Table>::Value;
+                        return Ok(Some(ptr.read()))
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+
         self.get_by_encoded_key::<T>(&key.encode())
     }
 
@@ -300,7 +362,23 @@ impl<K: TransactionKind> DbTx for Tx<K> {
 
     fn commit(self) -> Result<bool, DatabaseError> {
         self.execute_with_close_transaction_metric(TransactionOutcome::Commit, |this| {
-            match this.inner.commit().map_err(|e| DatabaseError::Commit(e.into())) {
+            // First, commit the inner MDBX transaction.
+            let commit_result = this.inner.commit().map_err(|e| DatabaseError::Commit(e.into()));
+            
+            // If inner commit succeeded, then perform the scalerize client write.
+            if let Ok((_v, ref _latency)) = &commit_result {
+                // Acquire mutable access and perform the scalerize client write.
+                let scalerize_write = this.scalerize_client
+                    .write()
+                    .map_err(|e| DatabaseError::Other(e.to_string()))
+                    .and_then(|mut client| client.write().map_err(DatabaseError::from));
+                // If the scalerize write fails, immediately return that error.
+                if let Err(err) = scalerize_write {
+                    return (Err(err), None);
+                }
+            }
+            // Then, return the inner commit result.
+            match commit_result {
                 Ok((v, latency)) => (Ok(v), Some(latency)),
                 Err(e) => (Err(e), None),
             }
@@ -348,6 +426,24 @@ impl DbTxMut for Tx<RW> {
     type DupCursorMut<T: DupSort> = Cursor<RW, T>;
 
     fn put<T: Table>(&self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
+        let table_code = match T::NAME {
+            "HashedAccounts" => Some(TABLE_CODE_HASHED_ACCOUNTS),
+            "HashedStorages" => Some(TABLE_CODE_HASHED_STORAGES),
+            _ => None,
+        };
+
+        if let Some(code) = table_code {
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Key".to_string()))?;
+            let value = bincode::serialize(&value)
+                .map_err(|_| DatabaseError::Other("Failed to serialize Value".to_string()))?;
+
+            return client.put(code, key.as_slice(), &value).map_err(DatabaseError::from)
+            // return client.write().map_err(DatabaseError::from)
+        }
+
         let key = key.encode();
         let value = value.compress();
         self.execute_with_operation_metric::<T, _>(
@@ -372,6 +468,54 @@ impl DbTxMut for Tx<RW> {
         key: T::Key,
         value: Option<T::Value>,
     ) -> Result<bool, DatabaseError> {
+        let table_code = match T::NAME {
+            "HashedAccounts" => Some(TABLE_CODE_HASHED_ACCOUNTS),
+            "HashedStorages" => Some(TABLE_CODE_HASHED_STORAGES),
+            _ => None,
+        };
+
+        if let Some(code) = table_code {
+            let mut client =
+                self.scalerize_client.write().map_err(|e| DatabaseError::Other(e.to_string()))?;
+            let key = bincode::serialize(&key)
+                .map_err(|_| DatabaseError::Other("Failed to serialize key".to_string()))?;
+
+            match code {
+                TABLE_CODE_HASHED_ACCOUNTS => {
+                    return client
+                        .delete(code, &key, None)
+                        .map(|_|true)
+                        .map_err(|e| DatabaseError::Other(e.to_string()))
+                    // return client.write().map(|_| true).map_err(DatabaseError::from)
+                }
+                TABLE_CODE_HASHED_STORAGES => {
+                    if let Some(value) = value {
+                        let storage_entry: StorageEntry;
+                        unsafe {
+                            let ptr = &value as *const <T as Table>::Value as *const StorageEntry;
+                            storage_entry = ptr.read();
+                        }
+
+                        let subkey = bincode::serialize(&storage_entry.key).map_err(|_| {
+                            DatabaseError::Other("Failed to serialize key".to_string())
+                        })?;
+                        return client
+                            .delete(code, &key, Some(&subkey))
+                            .map(|_|true)
+                            .map_err(|e| DatabaseError::Other(e.to_string()))
+                            // return client.write().map(|_| true).map_err(DatabaseError::from)
+                    } else {
+                        return client
+                            .delete(code, &key, None)
+                            .map(|_| true)
+                            .map_err(|e| DatabaseError::Other(e.to_string()))
+                        // return client.write().map(|_| true).map_err(DatabaseError::from)
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+
         let mut data = None;
 
         let value = value.map(Compress::compress);

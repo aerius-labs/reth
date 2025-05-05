@@ -56,10 +56,11 @@ pub use static_file::{
     StaticFileProviderRWRefMut, StaticFileWriter,
 };
 
-mod state;
+pub mod state;
 pub use state::{
     historical::{HistoricalStateProvider, HistoricalStateProviderRef},
     latest::{LatestStateProvider, LatestStateProviderRef},
+    scalerize_state_client::ScalerizeStateClient,
 };
 
 mod bundle_state_provider;

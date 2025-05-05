@@ -8,6 +8,7 @@ use reth_revm::{database::StateProviderDatabase, db::CacheDB, DatabaseRef};
 use reth_storage_api::{HashedPostStateProvider, StateProvider};
 use reth_trie::{HashedStorage, MultiProofTargets};
 use revm::Database;
+use tracing::info;
 
 /// Helper alias type for the state's [`CacheDB`]
 pub type StateCacheDb<'a> = CacheDB<StateProviderDatabase<StateProviderTraitObjWrapper<'a>>>;
@@ -141,6 +142,7 @@ impl HashedPostStateProvider for StateProviderTraitObjWrapper<'_> {
         &self,
         bundle_state: &revm::db::BundleState,
     ) -> reth_trie::HashedPostState {
+        info!("BUNDLE STATE IN StateProviderTraitObjWrapper");
         self.0.hashed_post_state(bundle_state)
     }
 }

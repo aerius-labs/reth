@@ -13,7 +13,7 @@ use alloy_consensus::EMPTY_ROOT_HASH;
 use alloy_primitives::{keccak256, Address, B256};
 use alloy_rlp::{BufMut, Encodable};
 use reth_execution_errors::{StateRootError, StorageRootError};
-use tracing::trace;
+use tracing::{trace, info};
 
 #[cfg(feature = "metrics")]
 use crate::metrics::{StateRootMetrics, TrieRootMetrics};
@@ -43,6 +43,12 @@ impl<T, H> StateRoot<T, H> {
     /// The cursors created by given factories are then used to walk through the accounts and
     /// calculate the state root value with.
     pub fn new(trie_cursor_factory: T, hashed_cursor_factory: H) -> Self {
+        // let rx = ScalerizeStateClient::spawn_connect_thread();
+        // let client_result = rx.recv().map_err(|_| {
+        //     DatabaseError::Other("Connection thread terminated abnormally".to_string())
+        // })?;
+        // let scalerize_client =
+        //     Arc::new(std::sync::RwLock::new(client_result.map_err(DatabaseError::from)?));
         Self {
             trie_cursor_factory,
             hashed_cursor_factory,
@@ -149,7 +155,6 @@ where
     }
 
     fn calculate(self, retain_updates: bool) -> Result<StateRootProgress, StateRootError> {
-        trace!(target: "trie::state_root", "calculating state root");
         let mut tracker = TrieTracker::default();
         let mut trie_updates = TrieUpdates::default();
 
@@ -256,6 +261,7 @@ where
 
         let root = hash_builder.root();
 
+        info!("ROOT: {:?}", root);
         let removed_keys = account_node_iter.walker.take_removed_keys();
         trie_updates.finalize(hash_builder, removed_keys, self.prefix_sets.destroyed_accounts);
 

@@ -1,6 +1,8 @@
 //! Implementation of the [`jsonrpsee`] generated [`EthApiServer`] trait. Handles RPC requests for
 //! the `eth_` namespace.
 use alloy_dyn_abi::TypedData;
+use serde_json;
+use jsonrpsee_types::error::ErrorObjectOwned;
 use alloy_eips::{eip2930::AccessListResult, BlockId, BlockNumberOrTag};
 use alloy_json_rpc::RpcObject;
 use alloy_primitives::{Address, Bytes, B256, B64, U256, U64};
@@ -14,7 +16,9 @@ use alloy_rpc_types_eth::{
 use alloy_serde::JsonStorageKey;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use reth_rpc_server_types::{result::internal_rpc_err, ToRpcResult};
-use tracing::trace;
+use tracing::{trace, info};
+use alloy_primitives::keccak256;
+use reth_provider::providers::ScalerizeStateClient;
 
 use crate::{
     helpers::{EthApiSpec, EthBlocks, EthCall, EthFees, EthState, EthTransactions, FullEthApi},
@@ -428,6 +432,15 @@ where
         full: bool,
     ) -> RpcResult<Option<RpcBlock<T::NetworkTypes>>> {
         trace!(target: "rpc::eth", ?number, ?full, "Serving eth_getBlockByNumber");
+        // Ok(EthBlocks::rpc_block(self, number.into(), full).await?)
+        let _scalerize_state_client = ScalerizeStateClient::connect().map_err(|err|{
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                err.to_string(),
+                None::<String>,
+            )
+        })?;
+        info!("CALLING BLOCKBYNUMBER");
         Ok(EthBlocks::rpc_block(self, number.into(), full).await?)
     }
 
@@ -805,7 +818,108 @@ where
         keys: Vec<JsonStorageKey>,
         block_number: Option<BlockId>,
     ) -> RpcResult<EIP1186AccountProofResponse> {
-        trace!(target: "rpc::eth", ?address, ?keys, ?block_number, "Serving eth_getProof");
-        Ok(EthState::get_proof(self, address, keys, block_number)?.await?)
+
+        let mut scalerize_state_client = ScalerizeStateClient::connect().map_err(|err|{
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                err.to_string(),
+                None::<String>,
+            )
+        })?;
+
+        let hashed_account_address = keccak256(address);
+        let serialized_hashed_account_address = bincode::serialize(&hashed_account_address).map_err(|e| {
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                format!("Bincode serialization error: {e}"),
+                None::<String>,
+            )
+        })?;
+
+        let mut buf: Vec<u8> = Vec::new();
+
+        // let mut buf = Vec::new();
+        for key in keys.clone() {
+            if let JsonStorageKey::Hash(hash) = key {
+                let serialized = bincode::serialize(&keccak256(hash)).map_err(|e| {
+                    jsonrpsee_types::error::ErrorObjectOwned::owned(
+                        jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                        format!("Bincode serialization error: {e}"),
+                        None::<String>,
+                    )
+                })?;
+                buf.extend_from_slice(&serialized);
+            }
+        }
+
+        let block_spec_bytes = match block_number {
+            Some(BlockId::Number(n)) => {
+                let mut v = Vec::new();
+                match n {
+                    BlockNumberOrTag::Number(num) => {
+                        v.push(0);
+                        v.extend_from_slice(&num.to_be_bytes());
+                    }
+                    // BlockNumberOrTag::Latest => {
+                    //     v.push(1);
+                    // }
+                    _ => {
+                        v.push(1);
+                    }
+                }
+                v
+            }
+            Some(BlockId::Hash(hash)) => {
+                let mut v: Vec<u8> = Vec::new();
+                v.push(2);
+                v.extend_from_slice(hash.block_hash.as_slice());
+                v
+            }
+            None => vec![1], // Default to "latest" when None.
+        };
+
+        let account_proof_response_bytes = scalerize_state_client.state_proof(&block_spec_bytes, &serialized_hashed_account_address, &buf).map_err(|e| {
+            jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                format!("eth_getProof failed error: {e}"),
+                None::<String>,
+            )
+        })?;
+
+        if account_proof_response_bytes.is_none() {
+            return Err(jsonrpsee_types::error::ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                "eth_getProof returned no data".to_string(),
+                None::<String>,
+            ));
+        }
+
+        let mut response: EIP1186AccountProofResponse = serde_json::from_slice(account_proof_response_bytes.as_ref().unwrap()).map_err(|e| {
+            ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                format!("Failed to deserialize proof response: {e}"),
+                None::<String>,
+            )
+        })?;
+
+        let account = self.get_account(address, block_number.unwrap_or_else(|| {
+            // Default to latest if no block number provided.
+            BlockId::Number(BlockNumberOrTag::Latest.into())
+        })).await?;
+    
+        // Update the proof response with account details.
+        if let Some(acc) = account {
+            response.address = address;
+            response.balance = acc.balance;
+            response.nonce = acc.nonce;
+            response.code_hash = acc.code_hash;
+            return Ok(response);
+        } else {
+            return Err(ErrorObjectOwned::owned(
+                jsonrpsee_types::error::INTERNAL_ERROR_CODE,
+                "Account not found for provided address".to_string(),
+                None::<String>,
+            ));
+        }
     }
 }

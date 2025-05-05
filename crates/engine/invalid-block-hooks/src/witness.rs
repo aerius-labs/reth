@@ -17,7 +17,7 @@ use reth_revm::{
     primitives::EnvWithHandlerCfg, DatabaseCommit, StateBuilder,
 };
 use reth_rpc_api::DebugApiClient;
-use reth_tracing::tracing::warn;
+use reth_tracing::tracing::{warn, info};
 use reth_trie::{updates::TrieUpdates, HashedStorage};
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug, fs::File, io::Write, path::PathBuf};
@@ -127,6 +127,7 @@ where
         // Take the bundle state
         let mut bundle_state = db.take_bundle();
 
+        info!("BUNDLE STATE IN INVALID BLOCK: {:?}", bundle_state.clone());
         // Initialize a map of preimages.
         let mut state_preimages = HashMap::default();
 

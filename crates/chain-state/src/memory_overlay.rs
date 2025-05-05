@@ -10,8 +10,7 @@ use reth_storage_api::{
     StateRootProvider, StorageRootProvider,
 };
 use reth_trie::{
-    updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof,
-    MultiProofTargets, StorageMultiProof, TrieInput,
+    updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof, MultiProofTargets, StorageMultiProof, TrieInput
 };
 use revm::db::BundleState;
 use std::sync::OnceLock;
@@ -112,9 +111,7 @@ impl<N: NodePrimitives> StateRootProvider for MemoryOverlayStateProviderRef<'_, 
         self.state_root_from_nodes(TrieInput::from_state(state))
     }
 
-    fn state_root_from_nodes(&self, mut input: TrieInput) -> ProviderResult<B256> {
-        let MemoryOverlayTrieState { nodes, state } = self.trie_state().clone();
-        input.prepend_cached(nodes, state);
+    fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
         self.historical.state_root_from_nodes(input)
     }
 
@@ -127,10 +124,8 @@ impl<N: NodePrimitives> StateRootProvider for MemoryOverlayStateProviderRef<'_, 
 
     fn state_root_from_nodes_with_updates(
         &self,
-        mut input: TrieInput,
+        input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        let MemoryOverlayTrieState { nodes, state } = self.trie_state().clone();
-        input.prepend_cached(nodes, state);
         self.historical.state_root_from_nodes_with_updates(input)
     }
 }
